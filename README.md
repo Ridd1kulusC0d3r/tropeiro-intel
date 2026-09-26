@@ -63,6 +63,8 @@ Instead of stopping at “is this domain suspicious?”, the workflow is designe
 
 ## Analytical guardrails
 
+Tropeiro intentionally separates concepts humans often mash together at 2 a.m. during an incident:
+
 ```text
 Infrastructure ownership ≠ campaign membership
 Campaign membership       ≠ common operator
@@ -104,6 +106,8 @@ Keys are not required to be committed, pasted into the repository or included in
 
 ## Output model
 
+The final investigation package can include:
+
 ```text
 Executive Brief
 Action Matrix
@@ -135,6 +139,7 @@ Local HTML Report
 - [Security and safe use](SECURITY.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Roadmap](docs/ROADMAP.md)
+- [Feature validation matrix](docs/FEATURE_MATRIX.md)
 
 ## Local Python usage
 
@@ -146,6 +151,8 @@ source .venv/bin/activate   # Windows: .venv\\Scripts\\activate
 pip install -e ".[dev,colab]"
 pytest -q
 ```
+
+The notebook remains the primary interface; the package exists to keep collection, attribution, reporting and testing modular.
 
 ## Safety model
 
@@ -159,7 +166,7 @@ pytest -q
 
 ## Project status
 
-Current public release: **3.1.1 Public Preview**.
+Current public release: **4.0 Investigation Station**.
 
 The current emphasis is analytical quality: better relationships, stronger provenance, lower false-positive risk and more defensible attribution. See the [roadmap](docs/ROADMAP.md) for the next correlation and historical-intelligence layers.
 

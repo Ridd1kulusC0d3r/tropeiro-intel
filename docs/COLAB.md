@@ -1,64 +1,37 @@
-# Official Google Colab Machine
+# Official Investigation Station — Google Colab
 
-The official notebook is:
+The canonical machine is `notebooks/Tropeiro_Intel_Official_Colab.ipynb`.
 
-`notebooks/Tropeiro_Intel_Official_Colab.ipynb`
+It intentionally exposes the investigation as a long, inspectable workflow while keeping implementation logic in the `tropeiro/` package. In 4.0 the notebook contains **75 cells**, including section headers, so analysts can run, inspect, rerun and skip individual layers without editing backend code.
 
-[Open it in Colab](https://colab.research.google.com/github/Ridd1kulusC0d3r/tropeiro-intel/blob/main/notebooks/Tropeiro_Intel_Official_Colab.ipynb)
+## Operating modes
 
-## Design goals
+- `PASSIVE` — default. Public/passive sources only.
+- `SAFE_ENRICHMENT` — optional provider enrichment, still no direct target probing.
+- `AUTHORIZED_ACTIVE` — enables explicitly opted-in low-impact direct checks only when the analyst has authorization.
 
-The Colab build is deliberately:
+Selecting an incompatible feature no longer intentionally crashes the notebook. It is disabled with a visible warning/status instead.
 
-- self-contained for the primary workflow;
-- passive by default;
-- CPU-only;
-- usable without paid APIs;
-- resilient when optional providers are unavailable;
-- local-file based, with no external database requirement;
-- exportable as JSON, CSV, STIX, MISP-like objects and HTML.
+## Main investigation planes
 
-## Cell groups
+1. Case setup / Secrets / Provider Planner
+2. IOC ingestion and normalization
+3. DNS / RDAP / CT / historical sources
+4. urlscan / TI / optional infrastructure providers
+5. dnstwist and Domain Similarity
+6. Passive web fingerprints and durable identifiers
+7. Evidence Ledger and Source Independence
+8. Relationship Graph and guarded clustering
+9. Campaign / Operator fingerprints
+10. Timeline and Infrastructure Churn
+11. Ownership / Attribution / ACH
+12. Passive takeover exposure
+13. Victimology / Objective / PIRs
+14. IOC decisions / Gaps / Next Best Pivot / Action Matrix
+15. Detection Engineering
+16. Executive Assessment
+17. Report Backend / Export Center / Case snapshot
 
-| Group | Purpose |
-|---|---|
-| Installation | lightweight dependencies |
-| Case configuration | seeds, brand, notes and feature flags |
-| Ingestion | normalize domains, URLs and lure IOCs |
-| Passive collection | DNS, RDAP, CT, historical sources |
-| Threat intelligence | optional TI providers |
-| Similarity / lookalikes | dnstwist-based candidate generation |
-| Signal engineering | explainable investigative signals |
-| Campaign graph | relationships and clustering |
-| Evidence Ledger | provenance and reliability |
-| Attribution | ownership, operator correlation and hypotheses |
-| Decision intelligence | PIRs, gaps, pivots, IOC decisions and actions |
-| Reporting | local interactive report and export center |
+## Performance
 
-## Secrets
-
-The public notebook reads optional values from Colab Secrets first, then environment variables, then leaves the provider disabled if no credential exists.
-
-Never put API tokens into a public notebook cell and commit it. GitHub has enough accidental-secret archaeology already.
-
-## Performance guidance
-
-For large cases:
-
-- reduce `DNSTWIST_MAX` during early triage;
-- enable expensive providers only for high-value pivots;
-- use campaign candidates before pairwise comparisons;
-- preserve cache/snapshots when rerunning the same case;
-- keep HTTP probing disabled unless necessary and authorized.
-
-## Reproducibility
-
-For a defensible case record, preserve:
-
-- notebook version;
-- case ID;
-- configuration flags;
-- source status;
-- Evidence Ledger;
-- export manifest/checksums;
-- generated report.
+The notebook uses caps on dnstwist, urlscan details and pairwise domain comparisons. Large domain sets use candidate generation before similarity comparison. Optional internet-wide providers are queried only when their feature flag is enabled.
