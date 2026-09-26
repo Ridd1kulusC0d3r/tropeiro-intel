@@ -1,0 +1,3 @@
+def build_intelligence_brief(case_id, assessment, actions, gaps, pivots, lifecycle, confidence, victimology, objectives, changes=None):
+    p1=[x for x in actions if x.get("priority")=="P1"]
+    return {"case_id":case_id,"executive_assessment":assessment,"why_we_care":assessment.get("implication") if isinstance(assessment,dict) else "","immediate_actions":p1[:10],"campaign_state":lifecycle,"confidence":confidence,"victimology":victimology,"objectives":objectives,"what_changed":changes or {},"what_we_dont_know":gaps,"next_best_pivots":pivots[:10],"analytic_note":"Judgments are evidence-based assessments, not proof of identity or intent."}

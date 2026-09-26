@@ -1,0 +1,7 @@
+dnstwist[full]
+tldextract
+rapidfuzz
+pandas
+networkx
+stix2
+pytest

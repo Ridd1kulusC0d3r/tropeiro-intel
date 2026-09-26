@@ -1,0 +1,3 @@
+BRAND_NAME="Tropeiro Intel";BRAND_TAGLINE="Campaign Intelligence & Attribution"
+def logo_svg(size=36):
+    return f'''<svg width="{size}" height="{size}" viewBox="0 0 64 64" role="img" aria-label="Tropeiro Intel"><rect x="3" y="3" width="58" height="58" rx="14" fill="none" stroke="currentColor" stroke-width="2"/><path d="M18 19h28M32 19v28" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round"/><circle cx="18" cy="19" r="4" fill="currentColor"/><circle cx="46" cy="19" r="4" fill="currentColor"/><circle cx="32" cy="47" r="4" fill="currentColor"/><path d="M32 33l10 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'''
