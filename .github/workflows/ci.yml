@@ -43,7 +43,16 @@ jobs:
           from tropeiro.correlation.advanced import source_independence
           from tropeiro.intelligence import build_ioc_decisions
           from tropeiro.reporting.rich_html import build_report
-          print(json.dumps({"version": tropeiro.__version__, "import": "ok"}))
+          from tropeiro.reporting.context import build_report_data, build_feature_matrix, report_preflight
+          from pathlib import Path
+          import tempfile
+          with tempfile.TemporaryDirectory() as td:
+              ns={"CASE_ID":"CI-SPARSE","WORKSPACE":Path(td),"ENABLE_DNS":True}
+              data=build_report_data(ns,version=tropeiro.__version__)
+              assert data["meta"]["partial_report"] is True
+              p=build_report(data,Path(td)/"report.html")
+              assert p.exists()
+          print(json.dumps({"version": tropeiro.__version__, "import": "ok", "report_sparse": "ok"}))
           PY
       - name: Validate official notebook bootstrap
         run: |
