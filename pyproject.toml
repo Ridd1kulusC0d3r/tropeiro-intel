@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tropeiro-intel"
-version = "4.1.0"
+version = "4.2.0"
 description = "Defensive phishing campaign OSINT, attribution and actionable intelligence for Google Colab and Python"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -15,6 +15,7 @@ dependencies = ["tldextract", "rapidfuzz", "pandas", "networkx", "stix2"]
 [project.optional-dependencies]
 colab = ["dnstwist", "ipywidgets"]
 colab-full = ["dnstwist[full]", "ipywidgets"]
+ai = ["gliner", "transformers>=4.51.0", "accelerate>=1.0"]
 dev = ["pytest>=8"]
 
 [tool.setuptools.packages.find]

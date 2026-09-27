@@ -44,6 +44,7 @@ jobs:
           from tropeiro.intelligence import build_ioc_decisions
           from tropeiro.reporting.rich_html import build_report
           from tropeiro.reporting.context import build_report_data, build_feature_matrix, report_preflight
+          from tropeiro.ai import build_evidence_packet, validate_ai_analysis, attach_ai_overlay
           from pathlib import Path
           import tempfile
           with tempfile.TemporaryDirectory() as td:
@@ -52,6 +53,10 @@ jobs:
               assert data["meta"]["partial_report"] is True
               p=build_report(data,Path(td)/"report.html")
               assert p.exists()
+              packet=build_evidence_packet(data)
+              ai=validate_ai_analysis({"key_findings":[]},packet)
+              over=attach_ai_overlay(data,analysis=ai,packet=packet)
+              assert over["evidence_ledger"]==data["evidence_ledger"]
           print(json.dumps({"version": tropeiro.__version__, "import": "ok", "report_sparse": "ok"}))
           PY
       - name: Validate official notebook bootstrap

@@ -145,4 +145,8 @@ def build_report_data(ns: Mapping[str, Any], version: str="unknown"):
         "takeover_exposure":_records(_ns_get(ns,"TAKEOVER_EXPOSURE",[])),
         "detection_package":_ns_get(ns,"DETECTION_PACKAGE",{}),
         "feature_matrix":feature_matrix,
+        "ai_entities":_records(_ns_get(ns,"AI_ENTITIES",[])),
+        "ai_analysis":_ns_get(ns,"AI_ANALYSIS",{}),
+        "ai_metadata":_ns_get(ns,"AI_METADATA",{}),
+        "ai_evidence_packet":_ns_get(ns,"AI_EVIDENCE_PACKET_META",{}),
     }
