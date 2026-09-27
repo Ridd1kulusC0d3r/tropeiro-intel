@@ -23,3 +23,42 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install -e ".[dev]"
       - run: pytest -q
+
+  colab-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[colab]"
+      - name: Import full backend
+        run: |
+          python - <<'PY'
+          import json
+          import tropeiro
+          from tropeiro.similarity import compare_domains
+          from tropeiro.correlation.advanced import source_independence
+          from tropeiro.intelligence import build_ioc_decisions
+          from tropeiro.reporting.rich_html import build_report
+          print(json.dumps({"version": tropeiro.__version__, "import": "ok"}))
+          PY
+      - name: Validate official notebook bootstrap
+        run: |
+          python - <<'PY'
+          import ast, json
+          from pathlib import Path
+          p=Path("notebooks/Tropeiro_Intel_Official_Colab.ipynb")
+          nb=json.loads(p.read_text())
+          assert len(nb["cells"]) >= 60
+          code=[c for c in nb["cells"] if c["cell_type"]=="code"]
+          for c in code:
+              s="".join(c.get("source",[]))
+              ast.parse("\n".join(x for x in s.splitlines() if not x.lstrip().startswith(("%","!"))))
+          first="".join(code[0]["source"])
+          assert "ensure_tropeiro" in first
+          assert "sys.path.insert" in first
+          print("official notebook bootstrap: ok")
+          PY

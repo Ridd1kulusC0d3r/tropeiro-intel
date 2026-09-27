@@ -39,3 +39,18 @@ Confirm the case reached the intelligence/reporting cells and that `REPORT_DATA`
 ## Colab runtime was reset
 
 Colab storage is ephemeral. Re-run installation/configuration and regenerate outputs, or persist the final case package to Drive manually.
+
+
+## `ModuleNotFoundError: No module named 'tropeiro'`
+
+This means the backend bootstrap did not complete, or the Colab runtime retained an incomplete clone.
+
+Version 4.0.1 makes cells 01 and 02 self-healing. Recommended recovery:
+
+1. Use **Runtime → Disconnect and delete runtime**.
+2. Reopen the official notebook from GitHub.
+3. Run cell **01 · Bootstrap robusto do backend oficial**.
+4. Confirm cell 02 reports `repo: true` and a `tropeiro_path` under `/content/tropeiro-intel`.
+5. Only then continue or use **Run all**.
+
+The bootstrap now removes an incomplete `/content/tropeiro-intel` directory, adds the source tree to `sys.path`, installs core dependencies first, and treats Colab extras as best-effort.
