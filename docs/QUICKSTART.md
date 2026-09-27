@@ -1,112 +1,95 @@
-# Quick Start
+# Quick Start — Guided Investigation
 
-This guide takes a new analyst from an empty Colab session to a defensible investigation package.
+Este fluxo foi escrito para alguém que nunca usou Colab.
 
-## 1. Open the official notebook
+## 1. Abra o notebook oficial
 
 [Open in Google Colab](https://colab.research.google.com/github/Ridd1kulusC0d3r/tropeiro-intel/blob/main/notebooks/Tropeiro_Intel_Official_Colab.ipynb)
 
-Use **Runtime → Run all** only after reviewing the case configuration. Optional providers can consume quotas, and archaeology by billing statement is a poor incident-response technique.
+**Não use Run all imediatamente.** Primeiro configure o alvo na etapa 04.
 
-## 2. Define the case
+## 2. Execute 01 · Bootstrap
 
-Minimum inputs:
+Clique em ▶ e espere a confirmação de que o backend foi importado.
 
-```text
-CASE_ID
-SEEDS
-```
+## 3. Execute 02 · Health Check
 
-Recommended context:
+Procure:
+- `repo: true`;
+- versão do Tropeiro;
+- caminho em `/content/tropeiro-intel`;
+- `Runtime saudável`.
 
-```text
-BRAND
-IMPERSONATED_ORG
-CAMPAIGN_NOTE
-LURE_TEXT
-MANUAL_IOCS
-```
+## 4. Use o Assistente Guiado
 
-`SEEDS` accepts domains or URLs separated by line breaks or commas.
+Na etapa 04:
 
-## 3. Keep the passive baseline
+1. escolha **Detectar automaticamente** ou o tipo;
+2. cole o alvo;
+3. confirme que o campo mudou para Domínio, URL, IP, E-mail, Hash, Telefone ou Texto da isca;
+4. mantenha `PASSIVE` na primeira investigação;
+5. escolha `balanced`.
 
-Recommended initial configuration:
-
-```python
-ENABLE_DNSTWIST = True
-ENABLE_WAYBACK = True
-ENABLE_COMMONCRAWL = True
-ENABLE_URLSCAN = True
-ENABLE_OTX = True
-ENABLE_VT = False
-ENABLE_THREATFOX = False
-ENABLE_HTTP_PROBE = False
-```
-
-Only enable direct HTTP probing for assets you are authorized to contact.
-
-## 4. Add optional secrets
-
-In Colab, open the **key icon → Secrets** and add only the providers you use:
+Exemplo:
 
 ```text
-URLSCAN_API_KEY
-VT_API_KEY
-THREATFOX_AUTH_KEY
-DNSDUMPSTER_API_KEY
-FOFA_API_KEY
-CENSYS_PAT
-CENSYS_ORG_ID
+Tipo: Domínio
+Alvo: dominio-suspeito.com
+Modo: PASSIVE
+Profundidade: balanced
 ```
 
-Missing keys do not invalidate the case. Optional sources should be treated as enrichment, not as prerequisites.
+## 5. Mantenha o plano automático
 
-## 5. Read results in this order
+Na etapa 05 deixe marcado:
 
-1. **Executive Assessment** – what the current evidence supports.
-2. **Action Matrix** – what should happen now.
-3. **IOC Decision Objects** – block/hunt/monitor/takedown posture.
-4. **Campaign State** – lifecycle and temporal context.
-5. **Attribution** – relationship confidence and competing hypotheses.
-6. **Collection Gaps** – what is still unknown.
-7. **Next Best Pivots** – where additional collection has the most value.
-8. **Evidence Ledger** – provenance behind the conclusions.
+```text
+Usar plano automático recomendado
+```
 
-## 6. Interpret scores correctly
+O Tropeiro calcula o plano com base em tipo de IOC, modo, budget, secrets, marca e número de alvos.
 
-Tropeiro distinguishes:
+## 6. Continue em ordem
 
-- investigation priority;
-- confidence in an observation;
-- source reliability;
-- actionability;
-- false-positive risk;
-- attribution confidence.
+Antes de **cada célula executável** existe uma caixa `🧭 Antes de executar` com:
+- objetivo;
+- como usar;
+- saída esperada;
+- recuperação de erro;
+- erros comuns;
+- indicação se você pode continuar.
 
-A priority score is **not a probability of maliciousness**.
+## 7. Entenda os status
 
-## 7. Export
+| Status | Significado |
+|---|---|
+| OK | executou |
+| READY | disponível |
+| SKIPPED | pulado por configuração |
+| SKIPPED_MISSING_SECRET | faltou API key opcional |
+| SKIPPED_BUDGET | não entra na profundidade |
+| NOT_NEEDED | não é necessário neste caso |
+| UNAVAILABLE | tentou executar e falhou |
 
-The Reporting Edition produces a local, self-contained HTML report with an Export Center. Common packages:
+## 8. Leia o resultado
 
-### SOC package
-- IOC Decisions CSV
-- Action Matrix CSV
-- Detection Package JSON
+1. Executive Assessment
+2. Action Matrix
+3. IOC Decisions
+4. Campaign / Relationship Graph
+5. Attribution / ACH
+6. Collection Gaps
+7. Next Best Pivots
+8. Evidence Ledger
+9. Source Health
 
-### Threat-intel package
-- Executive Brief
-- Evidence Ledger
-- Attribution Assessment
-- Collection Gaps
-- STIX/MISP exports
+## 9. Relatório e export
 
-### Management package
-- Local HTML report
-- Executive Brief
-- Immediate actions
+O relatório HTML pode ser gerado mesmo com módulos opcionais ausentes. Um caso incompleto é marcado como relatório parcial.
 
-## 8. Preserve the case
+## 10. Ajuda
 
-Keep the generated package, timestamps and checksums together. The Evidence Ledger is what turns a screenshot-and-vibes investigation into something another analyst can reproduce.
+- [Guia para iniciantes](BEGINNER_GUIDE.md)
+- [Tipos de busca](SEARCH_TYPES.md)
+- [Erros comuns](COMMON_ERRORS.md)
+- [Glossário](GLOSSARY.md)

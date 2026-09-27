@@ -7,23 +7,69 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-black.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-black.svg)](https://www.python.org/)
 
-**Tropeiro Intel** is a defensive OSINT / threat-intelligence laboratory for investigating phishing and fraud campaigns from domains, URLs, IOCs and lure text. Its goal is not to produce a pile of API responses. It turns observations into **evidence, relationships, assessments, actions and next collection priorities**.
+**Tropeiro Intel** is a defensive OSINT / threat-intelligence laboratory for investigating phishing and fraud campaigns from domains, URLs, IPs, hashes, observed contacts and lure text.
 
 ```text
 COLLECT → NORMALIZE → EVIDENCE → CORRELATE → ASSESS → ATTRIBUTE → DECIDE → PIVOT → REPORT
 ```
 
-## Start here
+## Primeira vez usando Colab ou OSINT?
 
-The official experience is the Colab notebook:
+Comece pelo **[Guia para iniciantes](docs/BEGINNER_GUIDE.md)**.
+
+A **4.1 Guided Investigation Station** inclui um assistente que muda o campo de entrada conforme o caso:
+
+```text
+Domínio
+URL
+IP
+E-mail observado
+Hash
+Telefone observado
+Vários IOCs
+Texto da isca
+```
+
+Também há uma caixa **🧭 Antes de executar** imediatamente antes de cada etapa do notebook explicando objetivo, como usar, saída esperada, erros mais comuns e o que fazer quando algo falhar.
+
+Material essencial:
+
+- [Guia para iniciantes](docs/BEGINNER_GUIDE.md)
+- [Tipos de busca](docs/SEARCH_TYPES.md)
+- [Erros comuns](docs/COMMON_ERRORS.md)
+- [Glossário](docs/GLOSSARY.md)
+
+## Start here
 
 ### ▶ [Open Tropeiro Intel in Google Colab](https://colab.research.google.com/github/Ridd1kulusC0d3r/tropeiro-intel/blob/main/notebooks/Tropeiro_Intel_Official_Colab.ipynb)
 
-No paid API is required for the core workflow. Optional providers deepen coverage when credentials are available.
+No paid API is required for the core workflow.
+
+For a first investigation:
+
+1. run **01 · Bootstrap**;
+2. run **02 · Health Check**;
+3. configure the target in **04 · Assistente guiado**;
+4. keep **PASSIVE**;
+5. keep **Usar plano automático recomendado** in step 05;
+6. continue in order.
+
+## Guided investigation
+
+The visible input changes according to the selected or detected IOC type. Internally the guided layer still populates the stable backend objects and variables, preserving advanced workflows.
+
+The automatic scan plan considers:
+
+- effective input type;
+- PASSIVE / SAFE_ENRICHMENT / AUTHORIZED_ACTIVE;
+- provider budget;
+- configured secrets;
+- brand context;
+- number of targets.
+
+Advanced analysts can disable automatic planning and manually control every feature.
 
 ## What Tropeiro answers
-
-Instead of stopping at “is this domain suspicious?”, the workflow is designed to help answer:
 
 - What is related to this IOC?
 - Which relationships are actually discriminating?
@@ -39,31 +85,29 @@ Instead of stopping at “is this domain suspicious?”, the workflow is designe
 
 | Capability | Status | Purpose |
 |---|---|---|
-| Multi-IOC ingestion | ✅ | domains, URLs, IPs, e-mails, phones, hashes and lure text |
+| Guided IOC input | ✅ | dynamic DOMAIN / URL / IP / EMAIL / HASH / PHONE / MULTI / LURE input |
+| Automatic scan plan | ✅ | recommends modules from case context |
+| Multi-IOC ingestion | ✅ | normalizes mixed indicators |
 | Passive DNS / RDAP / CT | ✅ | registration and infrastructure evidence |
 | Wayback / Common Crawl | ✅ | historical web context |
 | urlscan / OTX | ✅ | passive enrichment and scan history |
 | VirusTotal / ThreatFox | Optional | threat-intelligence enrichment |
 | dnstwist | ✅ | lookalike candidate generation |
+| Domain similarity | ✅ | lexical/token/confusable comparison |
 | Evidence Ledger | ✅ | provenance and source reliability |
-| Campaign graph | ✅ | typed entity relationships |
-| Campaign clustering | ✅ | campaign-level grouping |
-| Campaign fingerprint | ✅ | reusable campaign traits |
-| Ownership plane | ✅ | registrar / registrant org / ASN / certificates |
-| Operator correlation | ✅ | evidence-weighted relationship assessment |
-| Competing hypotheses | ✅ | same operator vs shared kit/hosting/reseller/coincidence |
-| Attribution ladder | ✅ | prevents correlation from becoming identity by magic |
-| PIRs / collection gaps | ✅ | investigation requirements and unanswered questions |
-| Next Best Pivot | ✅ | ranks the next collection step |
-| IOC Decision Objects | ✅ | actionability, FP risk and operational action |
+| Source independence | ✅ | prevents derived feeds from inflating confidence |
+| Relationship graph | ✅ | typed entity relationships |
+| Guarded clustering | ✅ | reduces cluster explosion on shared infrastructure |
+| Campaign / operator fingerprints | ✅ | separate operational representations |
+| Attribution / ACH | ✅ | competing hypotheses and attribution ladder |
+| PIRs / collection gaps | ✅ | unanswered intelligence requirements |
+| Next Best Pivot | ✅ | ranks useful next collection steps |
+| IOC Decision Objects | ✅ | actionability and FP control |
 | Detection bridge | ✅ | hunt/detection candidates |
-| Local rich report | ✅ | offline HTML cockpit + selective export |
-| STIX 2.1 / MISP-like export | ✅ | interoperability |
-| DNSDumpster / FOFA / Censys | Optional | deeper infrastructure enrichment |
+| Local rich report | ✅ | offline HTML + selective export |
+| DNSDumpster / FOFA / Censys | Optional | deeper enrichment |
 
 ## Analytical guardrails
-
-Tropeiro intentionally separates concepts humans often mash together at 2 a.m. during an incident:
 
 ```text
 Infrastructure ownership ≠ campaign membership
@@ -72,25 +116,11 @@ Common operator           ≠ real-world identity
 Real-world identity       ≠ known threat actor
 ```
 
-A shared IP, ASN, registrar, hosting company or CDN is **not** sufficient attribution. High-confidence conclusions require multiple independent, discriminating signals.
-
-## Colab quick start
-
-1. Open the official notebook.
-2. Run **Installation**.
-3. Set `CASE_ID`, seeds and optional lure text.
-4. Keep `ENABLE_HTTP_PROBE = False` unless you are working on an authorized target.
-5. Add optional API credentials through **Colab Secrets** or environment variables.
-6. Run the notebook top-to-bottom.
-7. Review **Executive Assessment**, **Action Matrix**, **IOC Decisions**, **Attribution**, **Collection Gaps** and **Next Best Pivots**.
-8. Generate the local enriched HTML report.
-9. Export only the artifacts required for the audience.
-
-See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the full walkthrough.
+Shared IPs, ASNs, registrars, CDNs and hosting providers are not sufficient attribution.
 
 ## API keys and secrets
 
-The notebook works without paid providers. When keys are available, prefer Colab Secrets with these names:
+Optional secrets can be configured in the Colab key icon:
 
 ```text
 URLSCAN_API_KEY
@@ -102,32 +132,14 @@ CENSYS_PAT
 CENSYS_ORG_ID
 ```
 
-Keys are not required to be committed, pasted into the repository or included in reports. Humanity has already leaked enough credentials into Git history.
-
-## Output model
-
-The final investigation package can include:
-
-```text
-Executive Brief
-Action Matrix
-IOC Decision Objects
-Campaign Clusters
-Ownership Summary
-Operator Correlation
-Attribution Assessment
-Collection Gaps
-Next Best Pivots
-Detection Package
-Evidence Ledger
-Timeline
-STIX 2.1
-MISP-like Event
-Local HTML Report
-```
+Do not paste API keys into public notebook cells.
 
 ## Documentation
 
+- [Beginner guide](docs/BEGINNER_GUIDE.md)
+- [Search types](docs/SEARCH_TYPES.md)
+- [Common errors](docs/COMMON_ERRORS.md)
+- [Glossary](docs/GLOSSARY.md)
 - [Quick start](docs/QUICKSTART.md)
 - [Official Colab guide](docs/COLAB.md)
 - [Intelligence model](docs/INTELLIGENCE_MODEL.md)
@@ -147,28 +159,23 @@ Local HTML Report
 git clone https://github.com/Ridd1kulusC0d3r/tropeiro-intel.git
 cd tropeiro-intel
 python -m venv .venv
-source .venv/bin/activate   # Windows: .venv\\Scripts\\activate
+source .venv/bin/activate
 pip install -e ".[dev,colab]"
 pytest -q
 ```
 
-The notebook remains the primary interface; the package exists to keep collection, attribution, reporting and testing modular.
-
 ## Safety model
 
 - Passive by default.
-- Direct HTTP probing is opt-in.
-- No automatic exploitation or resource claiming.
+- Direct HTTP probing is opt-in and requires authorization.
+- No resource claiming or takeover exploitation.
 - No private-PII hunting or doxxing workflows.
-- Public contacts used for correlation should be minimized or hashed in reports.
-- Attribution is expressed as evidence-backed confidence, not accusation.
-- “No hit” in a threat feed never means “benign”.
+- Observed e-mails/phones are correlation indicators, not invitations to search for private owners.
+- Attribution is evidence-backed confidence, not accusation.
 
 ## Project status
 
-Current public release: **4.0 Investigation Station**.
-
-The current emphasis is analytical quality: better relationships, stronger provenance, lower false-positive risk and more defensible attribution. See the [roadmap](docs/ROADMAP.md) for the next correlation and historical-intelligence layers.
+Current public release: **4.1 Guided Investigation Station**.
 
 ## License
 
