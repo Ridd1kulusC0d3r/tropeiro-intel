@@ -45,6 +45,7 @@ jobs:
           from tropeiro.reporting.rich_html import build_report
           from tropeiro.reporting.context import build_report_data, build_feature_matrix, report_preflight
           from tropeiro.ai import build_evidence_packet, validate_ai_analysis, attach_ai_overlay
+          from tropeiro.frontend.app import relationship_rows, _normalize_target
           from pathlib import Path
           import tempfile
           with tempfile.TemporaryDirectory() as td:
@@ -57,7 +58,10 @@ jobs:
               ai=validate_ai_analysis({"key_findings":[]},packet)
               over=attach_ai_overlay(data,analysis=ai,packet=packet)
               assert over["evidence_ledger"]==data["evidence_ledger"]
-          print(json.dumps({"version": tropeiro.__version__, "import": "ok", "report_sparse": "ok"}))
+          kind,iocs=_normalize_target("example.com","AUTO")
+          assert kind=="DOMAIN" and "example.com" in iocs["domain"]
+          assert relationship_rows({"example.com":{"dns":{"A":["1.2.3.4"]},"rdap":{},"cert_names":[]}})
+          print(json.dumps({"version": tropeiro.__version__, "import": "ok", "report_sparse": "ok", "frontend": "ok"}))
           PY
       - name: Validate official notebook bootstrap
         run: |

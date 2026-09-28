@@ -54,6 +54,12 @@ For a first investigation:
 5. keep **Usar plano automático recomendado** in step 05;
 6. continue in order.
 
+## Simple Colab frontend
+
+After bootstrap, the notebook can launch a **Gradio Investigation Workbench inside Colab**. It provides target input, mode/budget controls, optional GLiNER/Qwen, source health, IOC/evidence/relationship tables and report/package downloads.
+
+The frontend is a convenience layer over the same `tropeiro/` backend. The full notebook remains available for advanced analysis.
+
 ## Guided investigation
 
 The visible input changes according to the selected or detected IOC type. Internally the guided layer still populates the stable backend objects and variables, preserving advanced workflows.
