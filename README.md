@@ -105,6 +105,8 @@ Advanced analysts can disable automatic planning and manually control every feat
 | Relationship graph | ✅ | typed entity relationships |
 | Guarded clustering | ✅ | reduces cluster explosion on shared infrastructure |
 | Campaign / operator fingerprints | ✅ | separate operational representations |
+| Campaign Memory | ✅ | persistent cross-case comparison and historical similarity |
+| Prevalence / rarity engine | ✅ | downweights common artifacts across saved cases |
 | Attribution / ACH | ✅ | competing hypotheses and attribution ladder |
 | PIRs / collection gaps | ✅ | unanswered intelligence requirements |
 | Next Best Pivot | ✅ | ranks useful next collection steps |
@@ -112,6 +114,14 @@ Advanced analysts can disable automatic planning and manually control every feat
 | Detection bridge | ✅ | hunt/detection candidates |
 | Local rich report | ✅ | offline HTML + selective export |
 | DNSDumpster / FOFA / Censys | Optional | deeper enrichment |
+
+## Campaign Memory / Cross-Case Intelligence
+
+Version 4.4 can persist normalized artifacts from prior cases in a local SQLite database and compare new investigations against historical cases.
+
+It adds related-case ranking, rarity/prevalence, explainable shared-artifact contributions and penalties for common infrastructure. Cross-case similarity is not same-operator attribution.
+
+See [Campaign Memory](docs/CAMPAIGN_MEMORY.md).
 
 ## Analytical guardrails
 
@@ -154,6 +164,7 @@ Do not paste API keys into public notebook cells.
 - [Data model](docs/DATA_MODEL.md)
 - [Actionable intelligence](docs/ACTIONABLE_INTELLIGENCE.md)
 - [Reporting UX](docs/REPORTING_UX.md)
+- [Campaign Memory](docs/CAMPAIGN_MEMORY.md)
 - [Security and safe use](SECURITY.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -181,7 +192,7 @@ pytest -q
 
 ## Project status
 
-Current public release: **4.1 Guided Investigation Station**.
+Current public release: **4.4 Campaign Memory**.
 
 ## License
 
