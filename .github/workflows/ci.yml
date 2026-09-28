@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.10", "3.11", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -68,6 +68,20 @@ jobs:
               mem.store_case(data)
               assert mem.stats()["cases"]==1
           print(json.dumps({"version": tropeiro.__version__, "import": "ok", "report_sparse": "ok", "frontend": "ok", "campaign_memory": "ok"}))
+          PY
+      - name: Validate guided widget runtime
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path("notebooks/Tropeiro_Intel_Official_Colab.ipynb")
+          nb=json.loads(p.read_text())
+          ns={}
+          wanted=("04) COLE AQUI O ALVO DA PESQUISA","05) Plano de scans: automático ou manual")
+          for title in wanted:
+              cell=next(c for c in nb["cells"] if c["cell_type"]=="code" and title in "".join(c.get("source",[])))
+              exec(compile("".join(cell["source"]),"<colab-widget-smoke>","exec"),ns,ns)
+          print("guided widget runtime: ok")
           PY
       - name: Validate official notebook bootstrap
         run: |
