@@ -20,6 +20,7 @@ from ..reporting.context import build_report_data
 from ..reporting.rich_html import build_report
 from ..reporting.exporter import export_selected, zip_exports
 from ..onboarding import detect_input_type
+from ..memory import CaseMemory, default_memory_path
 from ..ai import (
     GLiNERLocal, QwenLocalChat, build_ai_text_corpus, build_evidence_packet,
     run_qwen_analysis, attach_ai_overlay, runtime_profile
@@ -108,6 +109,8 @@ def run_quick_case(
     mode: str="PASSIVE",
     budget: str="balanced",
     ai_mode: str="OFF",
+    memory_enabled: bool=True,
+    memory_path: str="",
     progress=None,
 ):
     if not (target or "").strip():
@@ -222,6 +225,34 @@ def run_quick_case(
         except Exception as exc:
             ai_status="IA indisponível: "+str(exc)[:300]
 
+    step(.76,"Comparando com casos anteriores")
+    memory_matches=[];artifact_prevalence=[];memory_stats={}
+    resolved_memory_path=(memory_path or "").strip() or str(default_memory_path())
+    if memory_enabled:
+        try:
+            memory=CaseMemory(resolved_memory_path)
+            memory_matches=memory.compare_report(report_data,exclude_case_id=case_id,limit=10)
+            artifact_prevalence=memory.prevalence_for_report(report_data,exclude_case_id=case_id)[:200]
+            memory_stats=memory.stats()
+            report_data["cross_case_intelligence"]={
+                "status":"OK","related_cases":memory_matches,
+                "artifact_prevalence":artifact_prevalence,
+                "memory_stats":memory_stats,"same_operator_inferred":False
+            }
+            memory.store_case(report_data)
+            memory_stats=memory.stats()
+            report_data["cross_case_intelligence"]["memory_stats"]=memory_stats
+        except Exception as exc:
+            report_data["cross_case_intelligence"]={
+                "status":"UNAVAILABLE","error":str(exc)[:400],
+                "related_cases":[],"artifact_prevalence":[]
+            }
+    else:
+        resolved_memory_path=""
+        report_data["cross_case_intelligence"]={
+            "status":"DISABLED","related_cases":[],"artifact_prevalence":[]
+        }
+
     step(.82,"Gerando relatório")
     report_dir=workspace/"report"
     report_dir.mkdir(parents=True,exist_ok=True)
@@ -242,6 +273,7 @@ def run_quick_case(
         "sources_ok":sum(1 for x in status if x.get("status")=="OK"),
         "sources_failed":sum(1 for x in status if x.get("status")!="OK"),
         "ai":ai_status,
+        "memory_matches":len(memory_matches),"memory_path":resolved_memory_path,
         "report":str(report_path)
     }
     return {
@@ -266,8 +298,8 @@ def _df(rows):
 def launch_colab_frontend(server_port: int=7860, inline: bool=True):
     import gradio as gr
 
-    def execute(target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,progress=gr.Progress()):
-        result=run_quick_case(target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,progress)
+    def execute(target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,memory_enabled,memory_path,progress=gr.Progress()):
+        result=run_quick_case(target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,memory_enabled,memory_path,progress)
         s=result["summary"]
         summary_html=f"""
         <div class='ti-card' style='padding:18px'>
@@ -278,6 +310,7 @@ def launch_colab_frontend(server_port: int=7860, inline: bool=True):
             <div><b>{s['relationships']}</b><br><span class='ti-note'>relações</span></div>
             <div><b>{s['sources_ok']}</b><br><span class='ti-note'>fontes OK</span></div>
             <div><b>{s['sources_failed']}</b><br><span class='ti-note'>fontes indisponíveis</span></div>
+            <div><b>{s.get('memory_matches',0)}</b><br><span class='ti-note'>casos relacionados</span></div>
           </div>
           <p class='ti-note' style='margin-top:14px'>{s['ai']}</p>
         </div>
@@ -290,6 +323,8 @@ def launch_colab_frontend(server_port: int=7860, inline: bool=True):
             _df(result["sources"]),
             _df(result["ai_entities"]),
             result["ai_analysis"],
+            _df(result["related_cases"]),
+            _df(result["artifact_prevalence"]),
             result["report_path"],
             result["package_path"],
         )
@@ -313,6 +348,8 @@ def launch_colab_frontend(server_port: int=7860, inline: bool=True):
                     mode=gr.Dropdown(["PASSIVE","SAFE_ENRICHMENT","AUTHORIZED_ACTIVE"],value="PASSIVE",label="Modo")
                     budget=gr.Dropdown(["free","balanced","extended"],value="balanced",label="Profundidade")
                 ai_mode=gr.Dropdown(["OFF","GLINER_ONLY","GLINER_QWEN","AUTO"],value="OFF",label="IA")
+                memory_enabled=gr.Checkbox(value=True,label="Usar Campaign Memory")
+                memory_path=gr.Textbox(label="Arquivo da memória (opcional)",placeholder="/content/tropeiro_case_memory.sqlite ou caminho no Google Drive")
                 run=gr.Button("Executar investigação",variant="primary")
                 gr.Markdown("**Recomendado para iniciantes:** PASSIVE · balanced · IA OFF/AUTO. E-mail e telefone são tratados apenas como IOCs já observados, sem busca de dados privados.")
             with gr.Column(scale=2):
@@ -329,14 +366,17 @@ def launch_colab_frontend(server_port: int=7860, inline: bool=True):
                     with gr.Tab("IA"):
                         ai_table=gr.Dataframe(interactive=False,wrap=True,label="Entidades GLiNER")
                         ai_json=gr.JSON(label="Análise Qwen")
+                    with gr.Tab("Memória"):
+                        related_table=gr.Dataframe(interactive=False,wrap=True,label="Casos relacionados")
+                        prevalence_table=gr.Dataframe(interactive=False,wrap=True,label="Prevalência / raridade")
                     with gr.Tab("Relatório"):
                         report_file=gr.File(label="Relatório HTML")
                         package_file=gr.File(label="Pacote completo ZIP")
 
         run.click(
             execute,
-            inputs=[target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode],
-            outputs=[summary,ioc_table,rel_table,ev_table,source_table,ai_table,ai_json,report_file,package_file],
+            inputs=[target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,memory_enabled,memory_path],
+            outputs=[summary,ioc_table,rel_table,ev_table,source_table,ai_table,ai_json,related_table,prevalence_table,report_file,package_file],
         )
 
     app.launch(

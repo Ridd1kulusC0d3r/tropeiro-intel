@@ -149,4 +149,5 @@ def build_report_data(ns: Mapping[str, Any], version: str="unknown"):
         "ai_analysis":_ns_get(ns,"AI_ANALYSIS",{}),
         "ai_metadata":_ns_get(ns,"AI_METADATA",{}),
         "ai_evidence_packet":_ns_get(ns,"AI_EVIDENCE_PACKET_META",{}),
+        "cross_case_intelligence":_ns_get(ns,"CROSS_CASE_INTELLIGENCE",{}),
     }
