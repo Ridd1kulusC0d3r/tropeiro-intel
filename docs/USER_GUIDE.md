@@ -32,7 +32,7 @@ O caso de demonstração usa uma isca fictícia da "Receita Federal" com domíni
 
 Botões: **Executar investigação** (coleta real) e **Carregar caso de demonstração** (offline).
 
-> **Modo e profundidade** só valem no notebook; o Workbench roda sempre o mesmo núcleo (DNS, RDAP, crt.sh, urlscan, OTX). Veja [CONFIGURATION](CONFIGURATION.md#o-que-liga-em-cada-superfície).
+> **Modo e profundidade** (em *Opções avançadas*) decidem quais fontes rodam e quantos detalhes de scan são baixados. Veja [CONFIGURATION](CONFIGURATION.md#o-que-liga-em-cada-superfície).
 
 ## O resumo do caso
 
@@ -86,6 +86,15 @@ Três tabelas brutas: **Relações coletadas**, **Evidence Ledger** (cada observ
 
 Primeira e última observação por entidade, com as fontes que a viram. Serve para provar reuso de infraestrutura e ordem dos fatos em um relatório.
 
+## Aba Campanha
+
+Duas tabelas que respondem "isto faz parte de uma operação maior?":
+
+- **Lotes de registro:** domínios do caso criados em sequência (janela de 10 minutos), no mesmo registrar e nameservers. Precisa de 2 ou mais domínios com data de registro (use `MULTI_IOC`). É **indício**, e a coluna *motivo* diz por quê.
+- **Iscas parecidas em casos anteriores:** compara o texto da isca com as guardadas na Campaign Memory (similaridade de texto ≥ 70%), mesmo sem IOC em comum.
+
+![Campanha](assets/06-campaign.png)
+
 ## Aba Memória
 
 Compara o caso com os anteriores guardados na [Campaign Memory](CAMPAIGN_MEMORY.md): **casos relacionados** e **prevalência/raridade** de cada artefato. Compartilhar um IP de hospedagem comum pesa pouco; compartilhar um identificador raro pesa muito. Similaridade **nunca** vira "mesmo operador" automaticamente.
@@ -99,7 +108,7 @@ Compara o caso com os anteriores guardados na [Campaign Memory](CAMPAIGN_MEMORY.
 | `sigma_dns.yml`, `sigma_network.yml` | regras Sigma (DNS e rede) |
 | Relatório HTML e ZIP | no acordeão: o pacote completo com `manifest.json` (SHA-256) |
 
-![Exportar](assets/06-export.png)
+![Exportar](assets/07-export.png)
 
 Formatos e importação: [OUTPUTS](OUTPUTS.md).
 
@@ -114,6 +123,7 @@ Formatos e importação: [OUTPUTS](OUTPUTS.md).
 
 ## Limites conhecidos
 
-- O Workbench não faz coleta de Wayback, VirusTotal, dnstwist, FOFA ou Censys (use o notebook).
+- O Workbench não roda dnstwist, DNSDumpster, FOFA nem Censys (use o notebook).
+- A confiança inicial de cada IOC no Workbench tem teto de 0,55: espere `MONITOR`/`HUNT`; `BLOCK` exige o caso completo.
 - O caso de demonstração não consulta a rede; os números são fictícios.
 - Com Gradio 6, o tema é aplicado no `launch()`; use `tropeiro workbench` (ou `launch_colab_frontend`) em vez de `build_app().launch()` para manter o visual.

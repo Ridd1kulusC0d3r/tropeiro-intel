@@ -31,7 +31,7 @@ pip install -e ".[colab]"          # núcleo + Workbench (Gradio) + dnstwist
 | *(nenhum)* | `tldextract`, `rapidfuzz`, `pandas`, `networkx`, `stix2` | CLI, bibliotecas, exportações |
 | `colab` | `dnstwist`, `ipywidgets`, `gradio` | Workbench e geração de lookalikes |
 | `colab-full` | `dnstwist[full]` e o resto de `colab` | recursos extras do dnstwist (ex.: whois, GeoIP, hashes fuzzy) |
-| `ai` | `gliner`, `transformers`, `accelerate` | extração com GLiNER e análise com Qwen |
+| `ai` | `gliner`, `transformers`, `accelerate`, `sentencepiece`, `protobuf` | extração com GLiNER e análise com Qwen |
 | `dev` | `pytest`, `ruff` | rodar os testes e o lint |
 
 Combine com vírgula: `pip install -e ".[colab,ai]"`.
@@ -59,7 +59,7 @@ O Tropeiro **funciona sem modelos**: as regras brasileiras sempre rodam. Os mode
 
 Os modelos são baixados do Hugging Face na primeira execução. `runtime_profile()` escolhe o Qwen conforme haja GPU. Nada é enviado a APIs externas: a inferência é local.
 
-> No sandbox de desenvolvimento os modelos reais não foram executados; os testes usam modelos simulados. Registre o resultado do seu ambiente em uma issue se algo divergir.
+> Validado de verdade em CPU com a isca de exemplo (veja [AI](AI.md#validação-com-modelos-reais)). Ainda não foi medido em GPU nem em casos reais.
 
 ## 4. Desenvolvimento
 
@@ -86,3 +86,4 @@ Faça cópia do arquivo da [Campaign Memory](CAMPAIGN_MEMORY.md) antes de atuali
 | `tropeiro: command not found` | venv inativo ou instalação sem `-e` | ative o venv ou use `python -m tropeiro.cli` |
 | Workbench abre sem tema escuro | Gradio antigo/incompatível | `pip install -U "gradio>=4.44,<7"` |
 | `torch` enorme no `pip install .[ai]` | dependência do `transformers` | use um ambiente separado para IA |
+| `SentencePieceExtractor requires the protobuf library` ou `tiktoken is required` ao carregar o GLiNER | faltavam `sentencepiece` e `protobuf` (extra `ai` antes da 4.7) | `pip install sentencepiece protobuf` ou reinstale com `.[ai]` |
