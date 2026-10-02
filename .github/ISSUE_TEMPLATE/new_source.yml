@@ -1,0 +1,12 @@
+name: Nova fonte / coletor
+description: Sugerir uma fonte pública passiva
+labels: [enhancement, collector]
+body:
+  - type: input
+    attributes: {label: Fonte e URL da API}
+    validations: {required: true}
+  - type: textarea
+    attributes: {label: Que evidência ela adiciona que as atuais não dão?}
+    validations: {required: true}
+  - type: dropdown
+    attributes: {label: Chave de API, options: ["Não precisa", "Gratuita", "Paga"]}

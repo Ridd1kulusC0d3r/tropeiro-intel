@@ -1,19 +1,62 @@
-# Tropeiro Intel
+<p align="center"><img src="docs/assets/logo.svg" width="96" alt="Tropeiro Intel"></p>
 
-> **Campaign Intelligence for phishing investigations, built for analysts and designed to run in Google Colab.**
+<h1 align="center">Tropeiro Intel</h1>
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Ridd1kulusC0d3r/tropeiro-intel/blob/main/notebooks/Tropeiro_Intel_Official_Colab.ipynb)
-[![CI](https://github.com/Ridd1kulusC0d3r/tropeiro-intel/actions/workflows/ci.yml/badge.svg)](https://github.com/Ridd1kulusC0d3r/tropeiro-intel/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-Apache--2.0-black.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10%2B-black.svg)](https://www.python.org/)
+<p align="center"><b>Campaign intelligence for phishing investigations.</b><br>
+Evidência rastreável, correlação cautelosa e IA verificada — nunca prova automática de identidade.</p>
 
-**Tropeiro Intel** is a defensive OSINT / threat-intelligence laboratory for investigating phishing and fraud campaigns from domains, URLs, IPs, hashes, observed contacts and lure text.
+<p align="center">
+  <a href="https://colab.research.google.com/github/Ridd1kulusC0d3r/tropeiro-intel/blob/main/notebooks/Tropeiro_Intel_Official_Colab.ipynb"><img alt="Open in Colab" src="https://colab.research.google.com/assets/colab-badge.svg"></a>
+  <a href="https://github.com/Ridd1kulusC0d3r/tropeiro-intel/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Ridd1kulusC0d3r/tropeiro-intel/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Python" src="https://img.shields.io/badge/python-3.10%E2%80%933.13-0B0D10?logo=python&logoColor=E8A33D">
+  <img alt="License" src="https://img.shields.io/badge/license-Apache--2.0-0B0D10">
+  <img alt="STIX 2.1" src="https://img.shields.io/badge/export-STIX%202.1%20%C2%B7%20MISP%20%C2%B7%20Sigma-0B0D10">
+</p>
+
+<p align="center"><img src="docs/assets/demo.gif" alt="Tropeiro Intel Investigation Workbench" width="900"></p>
+
+<p align="center"><sub>Caso de demonstração 100% offline (domínios <code>.example</code>, IPs de documentação). Reproduza com <code>python scripts/make_demo_media.py</code>.</sub></p>
+
+## Por que o Tropeiro
+
+| | Ferramentas típicas | Tropeiro |
+|---|---|---|
+| **Confiança** | um score opaco | evidência com proveniência; fontes derivadas não inflam a confiança |
+| **Correlação** | tudo que compartilha IP vira cluster | clusters guardados contra infraestrutura comum; prevalência/raridade entre casos |
+| **IA** | resposta em texto livre | GLiNER e Qwen só propõem; toda referência é validada contra o Evidence Ledger e achados sem suporte são rebaixados |
+| **Brasil** | iscas genéricas | Receita, Correios, PIX, Detran, INSS; CPF/CNPJ com dígito verificador, chave PIX, WhatsApp |
+| **Saída** | PDF | STIX 2.1 (Indicators + Campaign), MISP, Sigma, relatório HTML, ZIP com SHA-256 |
+
+## Início rápido
+
+```bash
+pip install -e ".[colab]"          # inclui Gradio
+python -c "from tropeiro.frontend.app import build_app; build_app().launch()"   # Workbench (botão "caso de demonstração" funciona sem rede)
+tropeiro lure examples/lure.txt --case C1 --out out/        # CLI offline: marca, IOCs, STIX/MISP/Sigma
+```
+
+Ou abra no **[Google Colab](https://colab.research.google.com/github/Ridd1kulusC0d3r/tropeiro-intel/blob/main/notebooks/Tropeiro_Intel_Official_Colab.ipynb)** — nenhuma API paga é necessária.
+
+## Arquitetura
+
+<p align="center"><img src="docs/assets/architecture.svg" alt="Arquitetura" width="900"></p>
 
 ```text
 COLLECT → NORMALIZE → EVIDENCE → CORRELATE → ASSESS → ATTRIBUTE → DECIDE → PIVOT → REPORT
 ```
 
-## What's new in 4.5 / Novidades da 4.5
+Detalhes: [ARCHITECTURE](docs/ARCHITECTURE.md) · [Camada de IA](docs/AI.md) · [Workbench](docs/FRONTEND.md) · [Modelo de dados](docs/DATA_MODEL.md)
+
+## Capturas
+
+<table>
+<tr><td><img src="docs/assets/02-graph.png" alt="Grafo"></td><td><img src="docs/assets/03-entities.png" alt="Isca e IA"></td></tr>
+<tr><td><img src="docs/assets/04-iocs.png" alt="IOCs"></td><td><img src="docs/assets/06-export.png" alt="Exportação"></td></tr>
+</table>
+
+---
+
+## Novidades · What's new
 
 **EN:** Offline CLI (`pip install -e . && tropeiro lure examples/lure.txt --out out/`) that classifies Brazilian phishing lures, extracts IOCs plus PIX/WhatsApp infrastructure and exports STIX 2.1 (Indicators + Campaign), MISP and Sigma. New helpers: phishing-kit fingerprinting, registration-batch clustering, confidence calibration.
 

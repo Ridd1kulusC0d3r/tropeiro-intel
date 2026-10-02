@@ -55,3 +55,11 @@ def valid_hostname(value):
     try: h=h.encode('idna').decode('ascii')
     except UnicodeError: return None
     return h if RE_HOSTNAME.match(h) else None
+
+def refang(text):
+    """Desfaz defang comum (hxxp, [.], (dot), [@]) para que regex e modelos enxerguem o IOC."""
+    t=str(text or '')
+    t=re.sub(r'hxxp(s?)',r'http\1',t,flags=re.I)
+    t=re.sub(r'\[\.\]|\(\.\)|\[dot\]|\(dot\)',".",t,flags=re.I)
+    t=re.sub(r'\[@\]|\(at\)|\[at\]','@',t,flags=re.I)
+    return t.replace('[:]',':').replace('[://]','://')

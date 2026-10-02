@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Tropeiro Intel">
+  <rect width="128" height="128" rx="28" fill="#0B0D10"/>
+  <rect x="1.5" y="1.5" width="125" height="125" rx="26.5" fill="none" stroke="#252A32" stroke-width="3"/>
+  <g stroke="#E8A33D" stroke-width="6" stroke-linecap="round" fill="none">
+    <path d="M34 40h60M64 40v52"/>
+  </g>
+  <g stroke="#9B8CFF" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="2 8" fill="none"><path d="M34 40L30 92M94 40l6 52"/></g>
+  <circle cx="34" cy="40" r="9" fill="#E8A33D"/><circle cx="94" cy="40" r="9" fill="#E8A33D"/>
+  <circle cx="64" cy="92" r="11" fill="#E8A33D"/><circle cx="30" cy="92" r="6" fill="#4FB3BF"/><circle cx="100" cy="92" r="6" fill="#9B8CFF"/>
+</svg>

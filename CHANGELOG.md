@@ -1,5 +1,10 @@
 # Changelog
 
+## 4.6.0 Workbench v2, hybrid AI, project materials
+- Front redesigned (dark theme, KPI cards, SVG relationship graph, curated IOC decision table, timeline, STIX/MISP/Sigma export tab, offline demo case). Fixed `KeyError` on `related_cases`/`artifact_prevalence` and a hard-coded `/content` workspace outside Colab.
+- AI: `extract_hybrid` (refang + BR rules always on, GLiNER optional, model output validated, rule+model agreement boost), `correlate_entities`, `lure_similarity`; Qwen JSON retry and `enforce_evidence_support` (unsupported findings downgraded).
+- Materials: logo, architecture diagram, social preview, demo GIF + screenshots (`scripts/make_demo_media.py`), README, AI/Workbench docs, CITATION, issue/PR templates, dependabot.
+
 ## 4.5.0 Hardening and exports
 - `http`: retry only on 429/5xx/timeouts (honours `Retry-After`), per-host rate limit, optional disk cache (`http.set_cache`).
 - `utils.valid_hostname` validates targets before they enter collector URLs (crt.sh, RDAP).

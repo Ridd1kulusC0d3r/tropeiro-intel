@@ -5,3 +5,5 @@ from .core import (
     analysis_request,parse_json_response,validate_ai_analysis,run_qwen_analysis,
     ask_qwen_about_case,attach_ai_overlay
 )
+from .core import enforce_evidence_support
+from .hybrid import extract_hybrid, correlate_entities, lure_similarity

@@ -203,10 +203,24 @@ def validate_ai_analysis(value: Mapping[str,Any],packet: Mapping[str,Any]) -> Di
     result["_validation"]={"allowed_evidence_refs":len(allowed),"warnings":warnings,"evidence_packet_sha256":packet.get("packet_sha256")}
     return result
 
-def run_qwen_analysis(chat: QwenLocalChat,packet: Mapping[str,Any],language: str="pt-BR",max_new_tokens: int=1200) -> Dict[str,Any]:
+def enforce_evidence_support(analysis: Dict[str,Any]) -> Dict[str,Any]:
+    """Achado sem nenhuma referência válida não pode ser 'observed' nem ter confiança alta."""
+    downgraded=0
+    for row in analysis.get("key_findings",[]) or []:
+        if isinstance(row,dict) and not row.get("evidence_refs"):
+            if row.get("analytic_type")=="observed" or row.get("confidence") in ("HIGH","MODERATE"):
+                row["analytic_type"]="hypothesis"; row["confidence"]="INSUFFICIENT"; downgraded+=1
+    analysis.setdefault("_validation",{})["downgraded_findings"]=downgraded
+    return analysis
+
+def run_qwen_analysis(chat: QwenLocalChat,packet: Mapping[str,Any],language: str="pt-BR",max_new_tokens: int=1200,retry: bool=True) -> Dict[str,Any]:
     raw=chat.chat(ai_system_prompt(language),analysis_request(packet),max_new_tokens=max_new_tokens)
     parsed=parse_json_response(raw)
-    data=validate_ai_analysis(parsed["data"],packet)
+    if retry and parsed["status"]=="RAW_TEXT":
+        fix="Sua resposta anterior nao era JSON valido. Reenvie SOMENTE o JSON do schema, sem texto extra. Resposta anterior: "+raw[:3000]
+        parsed=parse_json_response(chat.chat(ai_system_prompt(language),fix,max_new_tokens=max_new_tokens))
+        if parsed["status"]!="RAW_TEXT": parsed["status"]="OK_RETRY"
+    data=enforce_evidence_support(validate_ai_analysis(parsed["data"],packet))
     data["_generation_status"]=parsed["status"]
     return data
 

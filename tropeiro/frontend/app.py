@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -10,7 +11,7 @@ from typing import Any, Dict, List, Tuple
 import pandas as pd
 
 from ..models import Observation, now_iso
-from ..utils import extract_iocs, hostname, root_domain
+from ..utils import extract_iocs, hostname, root_domain, refang
 from ..config import Settings
 from ..collectors import dns, rdap, crtsh, urlscan, threatintel
 from ..evidence.ledger import build as build_ledger
@@ -23,19 +24,15 @@ from ..onboarding import detect_input_type
 from ..memory import CaseMemory, default_memory_path
 from ..ai import (
     GLiNERLocal, QwenLocalChat, build_ai_text_corpus, build_evidence_packet,
-    run_qwen_analysis, attach_ai_overlay, runtime_profile
+    run_qwen_analysis, attach_ai_overlay, runtime_profile, extract_hybrid, correlate_entities
 )
+from ..intelligence.br_lures import detect_br_lures
+from ..timeline import build_timeline, timeline_markdown
+from ..reporting.stix import bundle_from_iocs
+from ..reporting.misp import misp_event
+from ..intelligence.sigma import sigma_rules
 
-APP_CSS = """
-:root { --bg:#0a0b0c; --panel:#111315; --line:#2a2d31; --muted:#969da5; --ink:#f4f5f6; }
-.gradio-container { max-width: 1500px !important; margin: 0 auto !important; background: var(--bg) !important; }
-#ti-hero { padding:26px 8px 8px; }
-#ti-hero h1 { font-size:42px; line-height:1.05; margin:0 0 8px; letter-spacing:-.04em; }
-#ti-hero p { color:var(--muted); max-width:850px; font-size:15px; }
-.ti-card { border:1px solid var(--line) !important; border-radius:14px !important; background:var(--panel) !important; }
-.ti-note { color:var(--muted); font-size:12px; }
-footer { display:none !important; }
-"""
+from .views import APP_CSS, HERO, kpi_html, graph_svg, lure_html, edges_rows, ioc_rows
 
 def _secret(name: str) -> str:
     try:
@@ -73,6 +70,7 @@ def relationship_rows(ownership: Dict[str,Any]) -> List[Dict[str,Any]]:
 
 def _normalize_target(target: str, selected_type: str) -> Tuple[str,Dict[str,List[str]]]:
     kind=detect_input_type(target) if selected_type=="AUTO" else selected_type
+    target=refang(target)
     iocs=extract_iocs(target)
     if kind=="DOMAIN" and target.strip():
         iocs.setdefault("domain",[])
@@ -123,7 +121,8 @@ def run_quick_case(
     step(.03,"Preparando o caso")
     kind,iocs=_normalize_target(target,target_type)
     case_id=re.sub(r"[^A-Za-z0-9_.-]+","_",case_id or "TI-UI-001")
-    workspace=Path("/content")/f"tropeiro_ui_{case_id}"
+    base=Path("/content") if Path("/content").is_dir() else Path(tempfile.gettempdir())
+    workspace=base/f"tropeiro_ui_{case_id}"
     workspace.mkdir(parents=True,exist_ok=True)
     settings=Settings(case_id=case_id,analyst=analyst or "Analista",brand=brand or "",workspace=workspace,mode=mode,provider_budget=budget)
 
@@ -192,6 +191,20 @@ def run_quick_case(
             })
     decisions=build_ioc_decisions(ioc_candidates,WarningListEngine())
 
+    step(.60,"Extraindo e correlacionando entidades")
+    lure_text=refang(target) if kind in ("LURE_TEXT","MULTI_IOC") else ""
+    gliner=None
+    hybrid_status="regras"
+    if ai_mode!="OFF":
+        try:
+            gliner=GLiNERLocal(); gliner.load(); hybrid_status="regras + GLiNER"
+        except Exception as exc:
+            gliner=None; hybrid_status="regras (GLiNER indisponível: "+str(exc)[:120]+")"
+    hybrid_entities=extract_hybrid(lure_text,gliner) if lure_text else []
+    known=set(ledger["entity"])|set(ledger["value"]) if not ledger.empty else set()
+    ai_edges=correlate_entities(hybrid_entities,known)
+    lures=detect_br_lures(lure_text)
+
     ns={
         "CASE_ID":case_id,"ANALYST":analyst,"BRAND":brand,"IMPERSONATED_ORG":impersonated_org,
         "MODE":mode,"WORKSPACE":workspace,"STATUS":status,"OWNERSHIP":ownership,
@@ -211,7 +224,7 @@ def run_quick_case(
         step(.68,"Executando camada de IA")
         try:
             corpus=build_ai_text_corpus(report_data,target if kind=="LURE_TEXT" else "","")
-            gliner=GLiNERLocal()
+            gliner=gliner or GLiNERLocal()
             ai_entities=gliner.extract(corpus)
             ai_status=f"GLiNER: {len(ai_entities)} entidades candidatas"
             if ai_mode in {"GLINER_QWEN","AUTO"} and (ai_mode=="GLINER_QWEN" or runtime_profile().get("gpu")):
@@ -264,6 +277,12 @@ def run_quick_case(
         {"report_html","case_json","evidence_ledger_csv","ioc_decisions_csv"},
         report_path
     )
+    all_iocs={k:v for k,v in iocs.items() if k in ("domain","url","ip","email","hash","phone")}
+    cti_dir=workspace/"export"; cti_dir.mkdir(parents=True,exist_ok=True)
+    (cti_dir/"stix.json").write_text(bundle_from_iocs(all_iocs,case_id=case_id).serialize(pretty=True),encoding="utf-8")
+    (cti_dir/"misp.json").write_text(json.dumps(misp_event(case_id,all_iocs),ensure_ascii=False,indent=2),encoding="utf-8")
+    for k,v in sigma_rules(all_iocs,case_id).items(): (cti_dir/f"sigma_{k}.yml").write_text(v+"\n",encoding="utf-8")
+    cti_files=sorted(str(x) for x in cti_dir.glob("stix.json"))+sorted(str(x) for x in cti_dir.glob("misp.json"))+sorted(str(x) for x in cti_dir.glob("sigma_*.yml"))
     zip_path=zip_exports(created,workspace/f"Tropeiro_{case_id}_Package.zip")
 
     step(1.0,"Concluído")
@@ -272,7 +291,7 @@ def run_quick_case(
         "observations":len(obs),"evidence":len(ledger),"relationships":len(rels),
         "sources_ok":sum(1 for x in status if x.get("status")=="OK"),
         "sources_failed":sum(1 for x in status if x.get("status")!="OK"),
-        "ai":ai_status,
+        "ai":f"{ai_status} · extração: {hybrid_status}",
         "memory_matches":len(memory_matches),"memory_path":resolved_memory_path,
         "report":str(report_path)
     }
@@ -283,6 +302,9 @@ def run_quick_case(
         "evidence":ledger.to_dict("records") if not ledger.empty else [],
         "sources":status,
         "ai_entities":ai_entities,
+        "hybrid_entities":hybrid_entities,"ai_edges":ai_edges,"lures":lures,
+        "timeline_md":timeline_markdown(build_timeline(ledger)),
+        "related_cases":memory_matches,"artifact_prevalence":artifact_prevalence,"exports":cti_files,
         "ai_analysis":ai_summary,
         "report_path":str(report_path),
         "package_path":str(zip_path),
@@ -295,96 +317,101 @@ def _df(rows):
         return rows
     return pd.DataFrame(rows)
 
-def launch_colab_frontend(server_port: int=7860, inline: bool=True):
+def render_outputs(result):
+    """Converte o resultado do caso nas saídas da interface (puro: testável sem Gradio)."""
+    s=result["summary"]; ents=result.get("hybrid_entities",[]); edges=result.get("ai_edges",[])
+    return (
+        kpi_html(s,ents,edges),
+        graph_svg(result["relationships"],edges,ents),
+        _df(ioc_rows(result["iocs"])),
+        lure_html(result.get("lures",[]),ents),
+        _df(edges_rows(edges)),
+        _df(result.get("ai_entities",[])),
+        result.get("ai_analysis") or {},
+        _df(result["relationships"]),
+        _df(result["evidence"]),
+        result.get("timeline_md","") or "_Sem eventos._",
+        _df(result["sources"]),
+        _df(result.get("related_cases",[])),
+        _df(result.get("artifact_prevalence",[])),
+        result.get("exports") or [],
+        result.get("report_path"),
+        result.get("package_path"),
+    )
+
+def build_app():
     import gradio as gr
+    from .demo import demo_result, DEMO_LURE
 
     def execute(target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,memory_enabled,memory_path,progress=gr.Progress()):
-        result=run_quick_case(target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,memory_enabled,memory_path,progress)
-        s=result["summary"]
-        summary_html=f"""
-        <div class='ti-card' style='padding:18px'>
-          <div style='font-size:12px;color:#969da5;text-transform:uppercase;letter-spacing:.12em'>Investigation complete</div>
-          <h2 style='margin:6px 0 12px'>{s['target']}</h2>
-          <div style='display:flex;gap:22px;flex-wrap:wrap'>
-            <div><b>{s['evidence']}</b><br><span class='ti-note'>evidências</span></div>
-            <div><b>{s['relationships']}</b><br><span class='ti-note'>relações</span></div>
-            <div><b>{s['sources_ok']}</b><br><span class='ti-note'>fontes OK</span></div>
-            <div><b>{s['sources_failed']}</b><br><span class='ti-note'>fontes indisponíveis</span></div>
-            <div><b>{s.get('memory_matches',0)}</b><br><span class='ti-note'>casos relacionados</span></div>
-          </div>
-          <p class='ti-note' style='margin-top:14px'>{s['ai']}</p>
-        </div>
-        """
-        return (
-            summary_html,
-            _df(result["iocs"]),
-            _df(result["relationships"]),
-            _df(result["evidence"]),
-            _df(result["sources"]),
-            _df(result["ai_entities"]),
-            result["ai_analysis"],
-            _df(result["related_cases"]),
-            _df(result["artifact_prevalence"]),
-            result["report_path"],
-            result["package_path"],
-        )
+        return render_outputs(run_quick_case(target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,memory_enabled,memory_path,progress))
 
-    with gr.Blocks(css=APP_CSS,title="Tropeiro Intel · Investigation Workbench") as app:
-        gr.HTML("""<div id='ti-hero'><div style='font:600 11px ui-monospace;letter-spacing:.14em;color:#969da5'>TROPEIRO · OPEN-SOURCE INTELLIGENCE</div><h1>Investigation Workbench</h1><p>Cole um alvo, execute a investigação e leia evidência, relações e relatório sem precisar operar as células avançadas do notebook.</p></div>""")
+    def load_demo():
+        return (DEMO_LURE,"LURE_TEXT",*render_outputs(demo_result()))
+
+    theme=gr.themes.Base(primary_hue="amber",neutral_hue="slate",font=("ui-sans-serif","system-ui","sans-serif"),
+                         font_mono=("ui-monospace","Menlo","monospace")).set(
+        body_background_fill="#0B0D10",body_background_fill_dark="#0B0D10",block_background_fill="#12151A",block_background_fill_dark="#12151A",
+        block_border_color="#252A32",block_border_color_dark="#252A32",input_background_fill="#0F1217",input_background_fill_dark="#0F1217",
+        button_primary_background_fill="#E8A33D",button_primary_background_fill_dark="#E8A33D",
+        button_primary_text_color="#0B0D10",button_primary_text_color_dark="#0B0D10")
+
+    with gr.Blocks(css=APP_CSS,theme=theme,js="() => { document.body.classList.add('dark'); }",title="Tropeiro Intel · Investigation Workbench") as app:
+        gr.HTML(HERO)
         with gr.Row():
             with gr.Column(scale=1,min_width=360,elem_classes=["ti-card"]):
                 gr.Markdown("### Nova investigação")
-                target_type=gr.Dropdown(
-                    choices=["AUTO","DOMAIN","URL","IP","EMAIL","HASH","PHONE","MULTI_IOC","LURE_TEXT"],
-                    value="AUTO",label="Tipo de busca"
-                )
-                target=gr.Textbox(label="Alvo da investigação",placeholder="ex.: dominio-suspeito.com",lines=3)
-                with gr.Row():
-                    case_id=gr.Textbox(value="TI-UI-001",label="ID do caso")
-                    analyst=gr.Textbox(value="Analista",label="Analista")
-                brand=gr.Textbox(label="Marca (opcional)",placeholder="ex.: WhatsApp")
-                org=gr.Textbox(label="Organização imitada (opcional)",placeholder="ex.: Meta")
-                with gr.Row():
-                    mode=gr.Dropdown(["PASSIVE","SAFE_ENRICHMENT","AUTHORIZED_ACTIVE"],value="PASSIVE",label="Modo")
-                    budget=gr.Dropdown(["free","balanced","extended"],value="balanced",label="Profundidade")
-                ai_mode=gr.Dropdown(["OFF","GLINER_ONLY","GLINER_QWEN","AUTO"],value="OFF",label="IA")
-                memory_enabled=gr.Checkbox(value=True,label="Usar Campaign Memory")
-                memory_path=gr.Textbox(label="Arquivo da memória (opcional)",placeholder="/content/tropeiro_case_memory.sqlite ou caminho no Google Drive")
+                target_type=gr.Dropdown(choices=["AUTO","DOMAIN","URL","IP","EMAIL","HASH","PHONE","MULTI_IOC","LURE_TEXT"],value="AUTO",label="Tipo de busca")
+                target=gr.Textbox(label="Alvo da investigação",placeholder="domínio, URL, IP… ou cole o texto da isca (aceita hxxp / [.])",lines=4)
+                with gr.Accordion("Opções avançadas",open=False):
+                    with gr.Row():
+                        case_id=gr.Textbox(value="TI-UI-001",label="ID do caso")
+                        analyst=gr.Textbox(value="Analista",label="Analista")
+                    brand=gr.Textbox(label="Marca (opcional)",placeholder="ex.: Receita Federal")
+                    org=gr.Textbox(label="Organização imitada (opcional)")
+                    with gr.Row():
+                        mode=gr.Dropdown(["PASSIVE","SAFE_ENRICHMENT","AUTHORIZED_ACTIVE"],value="PASSIVE",label="Modo")
+                        budget=gr.Dropdown(["free","balanced","extended"],value="balanced",label="Profundidade")
+                    memory_enabled=gr.Checkbox(value=True,label="Usar Campaign Memory")
+                    memory_path=gr.Textbox(label="Arquivo da memória (opcional)")
+                ai_mode=gr.Dropdown(["OFF","GLINER_ONLY","GLINER_QWEN","AUTO"],value="OFF",label="IA (modelos)",
+                                    info="OFF ainda extrai com regras. GLiNER/Qwen acrescentam entidades e análise.")
                 run=gr.Button("Executar investigação",variant="primary")
-                gr.Markdown("**Recomendado para iniciantes:** PASSIVE · balanced · IA OFF/AUTO. E-mail e telefone são tratados apenas como IOCs já observados, sem busca de dados privados.")
+                demo=gr.Button("Carregar caso de demonstração (offline)")
+                gr.Markdown("PASSIVE · balanced é o recomendado. E-mail e telefone são tratados como IOCs já observados, sem busca de dados privados.")
             with gr.Column(scale=2):
-                summary=gr.HTML("<div class='ti-card' style='padding:22px'><b>Aguardando investigação.</b><br><span class='ti-note'>Preencha o alvo à esquerda e clique em Executar investigação.</span></div>")
+                summary=gr.HTML("<div class='ti-card ti-empty'><b>Aguardando investigação.</b><br>Preencha o alvo à esquerda ou carregue o caso de demonstração.</div>")
                 with gr.Tabs():
+                    with gr.Tab("Grafo"):
+                        graph=gr.HTML()
                     with gr.Tab("IOCs"):
                         ioc_table=gr.Dataframe(interactive=False,wrap=True)
-                    with gr.Tab("Relações"):
-                        rel_table=gr.Dataframe(interactive=False,wrap=True)
-                    with gr.Tab("Evidências"):
-                        ev_table=gr.Dataframe(interactive=False,wrap=True)
-                    with gr.Tab("Fontes"):
-                        source_table=gr.Dataframe(interactive=False,wrap=True)
-                    with gr.Tab("IA"):
-                        ai_table=gr.Dataframe(interactive=False,wrap=True,label="Entidades GLiNER")
-                        ai_json=gr.JSON(label="Análise Qwen")
+                    with gr.Tab("Isca e IA"):
+                        lure_view=gr.HTML()
+                        edges_table=gr.Dataframe(interactive=False,wrap=True,label="Ligações propostas pela IA (derivadas)")
+                        ai_table=gr.Dataframe(interactive=False,wrap=True,label="Entidades GLiNER (bruto)")
+                        ai_json=gr.JSON(label="Análise Qwen (validada contra o Evidence Ledger)")
+                    with gr.Tab("Dados"):
+                        rel_table=gr.Dataframe(interactive=False,wrap=True,label="Relações coletadas")
+                        ev_table=gr.Dataframe(interactive=False,wrap=True,label="Evidence Ledger")
+                        source_table=gr.Dataframe(interactive=False,wrap=True,label="Saúde das fontes")
+                    with gr.Tab("Linha do tempo"):
+                        timeline=gr.Markdown()
                     with gr.Tab("Memória"):
                         related_table=gr.Dataframe(interactive=False,wrap=True,label="Casos relacionados")
                         prevalence_table=gr.Dataframe(interactive=False,wrap=True,label="Prevalência / raridade")
-                    with gr.Tab("Relatório"):
-                        report_file=gr.File(label="Relatório HTML")
-                        package_file=gr.File(label="Pacote completo ZIP")
+                    with gr.Tab("Exportar"):
+                        gr.Markdown("**STIX 2.1** (Indicators + Campaign), **MISP** e **Sigma** prontos para o seu TIP/SIEM.")
+                        cti_files=gr.File(label="STIX · MISP · Sigma",file_count="multiple")
+                        with gr.Accordion("Relatório HTML e pacote completo (ZIP)",open=False):
+                            report_file=gr.File(label="Relatório HTML")
+                            package_file=gr.File(label="Pacote completo ZIP")
+        outs=[summary,graph,ioc_table,lure_view,edges_table,ai_table,ai_json,rel_table,ev_table,timeline,source_table,related_table,prevalence_table,cti_files,report_file,package_file]
+        run.click(execute,inputs=[target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,memory_enabled,memory_path],outputs=outs)
+        demo.click(load_demo,outputs=[target,target_type,*outs])
+    return app
 
-        run.click(
-            execute,
-            inputs=[target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,memory_enabled,memory_path],
-            outputs=[summary,ioc_table,rel_table,ev_table,source_table,ai_table,ai_json,related_table,prevalence_table,report_file,package_file],
-        )
-
-    app.launch(
-        server_name="0.0.0.0",
-        server_port=server_port,
-        share=False,
-        inline=inline,
-        prevent_thread_lock=True,
-        show_error=True,
-    )
+def launch_colab_frontend(server_port: int=7860, inline: bool=True):
+    app=build_app()
+    app.launch(server_name="0.0.0.0",server_port=server_port,share=False,inline=inline,prevent_thread_lock=True,show_error=True)
     return app
