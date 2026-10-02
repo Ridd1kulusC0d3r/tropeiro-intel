@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.5.0 Hardening and exports
+- `http`: retry only on 429/5xx/timeouts (honours `Retry-After`), per-host rate limit, optional disk cache (`http.set_cache`).
+- `utils.valid_hostname` validates targets before they enter collector URLs (crt.sh, RDAP).
+- STIX export now emits Indicators (validity window, TLP, confidence), a Campaign and Relationships, with deterministic IDs.
+- MISP export: hash types by length, phone, TLP tags; `to_ids` only for domain/url/ip/hash by default.
+- New: phishing-kit fingerprint (`similarity.kit`), registration batches (`correlation.registration`), BR lure rules with CPF/CNPJ check-digit validation, PIX/WhatsApp extraction (`intelligence.br_lures`), Sigma generator, confidence calibration (Brier/reliability), `timeline_summary`, offline CLI (`tropeiro lure`).
+- CI: ruff (syntax/undefined-name subset).
+
 ## 4.4.1 Colab Widget Compatibility
 - Fixed the guided case form using `IPython.display.HTML` inside `ipywidgets.VBox`, which raised `TraitError` on current Colab runtimes.
 - The guided case form and scan-plan header now use `widgets.HTML`.

@@ -13,6 +13,14 @@
 COLLECT → NORMALIZE → EVIDENCE → CORRELATE → ASSESS → ATTRIBUTE → DECIDE → PIVOT → REPORT
 ```
 
+## What's new in 4.5 / Novidades da 4.5
+
+**EN:** Offline CLI (`pip install -e . && tropeiro lure examples/lure.txt --out out/`) that classifies Brazilian phishing lures, extracts IOCs plus PIX/WhatsApp infrastructure and exports STIX 2.1 (Indicators + Campaign), MISP and Sigma. New helpers: phishing-kit fingerprinting, registration-batch clustering, confidence calibration.
+
+**PT:** CLI offline para analisar iscas brasileiras (Receita, Correios, PIX, Detran...), extrair IOCs, CPF/CNPJ válidos, chave PIX e WhatsApp, e exportar STIX/MISP/Sigma. Veja o [CHANGELOG](CHANGELOG.md).
+
+> **Maturity note:** items marked ✅ below are implemented; the depth varies. Treat `reporting/` exports and `storage/case_store.py` as *beta*; `memory/store.py` is the main persistence layer.
+
 ## Primeira vez usando Colab ou OSINT?
 
 Comece pelo **[Guia para iniciantes](docs/BEGINNER_GUIDE.md)**.
