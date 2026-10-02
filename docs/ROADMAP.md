@@ -18,6 +18,8 @@ Nunca executado com modelos reais fora dos testes: GLiNER e Qwen (rodar no Colab
 | Ligar `registration_batches` e `cluster_kits` ao pipeline | aba "Campanha" mostra lotes de registro e kits repetidos, com o motivo |
 | Ligar `lure_similarity` à Campaign Memory | isca nova aponta casos antigos com texto parecido, sem IOC em comum |
 | Ativar cache HTTP no Workbench | segunda execução do mesmo alvo não repete chamadas |
+| Notebook usar extração híbrida (`extract_hybrid`) e exports STIX/MISP/Sigma novos | mesma saída do Workbench e da CLI |
+| Workbench respeitar modo e profundidade | hoje roda sempre o mesmo núcleo (DNS, RDAP, crt.sh, urlscan, OTX); passar a usar `recommended_features` |
 | CI com Gradio 5 **e** 6 | matriz no workflow (o dependabot já liberou `<7`) |
 | Unificar `storage/case_store.py` com `memory/store.py` | um só armazenamento; migração do que existir |
 | Release `v4.6.0`, topics, social preview | feitos no GitHub |

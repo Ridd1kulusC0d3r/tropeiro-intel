@@ -1,5 +1,13 @@
 # Changelog
 
+## 4.6.1 Documentation overhaul and fixes
+- Docs: new index, installation, configuration, Workbench user guide (with screenshots), CLI, outputs/formats, results interpretation, cookbook (7 recipes), Python API, FAQ; refreshed quickstart, glossary, common errors, search types, contributing. Python examples in `docs/` are executed in CI; relative links are checked.
+- Fix: the CLI did not refang input, so defanged lure domains were lost. `extract_lure_infra` now refangs.
+- Fix: legitimate platforms (WhatsApp, Telegram, Google, gov.br...) were exported as blocking IOCs. New `intelligence.legit_domains`; STIX/MISP/Sigma now carry them as context only (no Indicator, `to_ids=false`); the UI shows a "PLATAFORMA LEGÍTIMA" badge.
+- Fix: Sigma DNS rule matched `endswith 'domain'` (also `notdomain`); now exact match or subdomain.
+- Fix: Workbench now records `rdap:created/updated/expires` in the ledger; its ZIP includes STIX/MISP/Sigma and a manifest that hashes them.
+- New: `tropeiro workbench` command and `launch_local()`.
+
 ## 4.6.0 Workbench v2, hybrid AI, project materials
 - Front redesigned (dark theme, KPI cards, SVG relationship graph, curated IOC decision table, timeline, STIX/MISP/Sigma export tab, offline demo case). Fixed `KeyError` on `related_cases`/`artifact_prevalence` and a hard-coded `/content` workspace outside Colab.
 - AI: `extract_hybrid` (refang + BR rules always on, GLiNER optional, model output validated, rule+model agreement boost), `correlate_entities`, `lure_similarity`; Qwen JSON retry and `enforce_evidence_support` (unsupported findings downgraded).

@@ -13,6 +13,7 @@ from ..timeline import build_timeline, timeline_markdown
 from ..reporting.stix import bundle_from_iocs
 from ..reporting.misp import misp_event
 from ..intelligence.sigma import sigma_rules
+from ..intelligence.legit_domains import partition_iocs
 
 DEMO_LURE=("Receita Federal: seu CPF está irregular. Regularize hoje em hxxps://receita-regulariza[.]example/cpf "
            "ou fale com o atendimento https://wa.me/5511999990000. Não perca o prazo. Banco Aurora S.A.")
@@ -32,7 +33,7 @@ def demo_result() -> dict:
     for dom,data in DEMO_OWNERSHIP.items():
         for rtype,vals in data['dns'].items():
             obs+=[Observation(dom,'domain',f'dns:{rtype}',v,observed_at=f'2026-09-2{i}T10:00:00+00:00') for i,v in enumerate(vals)]
-        obs+=[Observation(dom,'domain','rdap:registrar_org',o) for o in data['rdap']['registrar_orgs']]
+        obs+=[Observation(dom,'domain','rdap:registrar_org',o,observed_at='2026-09-25T08:30:00+00:00') for o in data['rdap']['registrar_orgs']]
         obs+=[Observation(dom,'domain','crt.sh',n,observed_at='2026-09-25T08:00:00+00:00') for n in data['cert_names']]
     ledger=build_ledger(obs,{'dns':.7,'rdap':.8,'crt.sh':.85,'manual':.5})
     rels=relationship_rows(DEMO_OWNERSHIP)
@@ -45,9 +46,9 @@ def demo_result() -> dict:
            for t,v,c,ev,fam,act in spec]
     decisions=build_ioc_decisions(cands,WarningListEngine())
     out=Path(tempfile.mkdtemp(prefix='tropeiro_demo_'))
-    all_iocs={'domain':list(DEMO_OWNERSHIP),'ip':['203.0.113.17'],'url':iocs.get('url',[])}
-    (out/'stix.json').write_text(bundle_from_iocs(all_iocs,case_id='DEMO-001').serialize(pretty=True),encoding='utf-8')
-    import json; (out/'misp.json').write_text(json.dumps(misp_event('DEMO-001',all_iocs),indent=2),encoding='utf-8')
+    all_iocs,ctx=partition_iocs({'domain':list(DEMO_OWNERSHIP),'ip':['203.0.113.17'],'url':iocs.get('url',[])})
+    (out/'stix.json').write_text(bundle_from_iocs(all_iocs,case_id='DEMO-001',context_only=ctx).serialize(pretty=True),encoding='utf-8')
+    import json; (out/'misp.json').write_text(json.dumps(misp_event('DEMO-001',all_iocs,context_only=ctx),indent=2),encoding='utf-8')
     for k,v in sigma_rules(all_iocs,'DEMO-001').items(): (out/f'sigma_{k}.yml').write_text(v+'\n',encoding='utf-8')
     summary={'case_id':'DEMO-001','target':'Isca "Receita Federal" (demonstração offline)','evidence':len(ledger),'relationships':len(rels),
              'sources_ok':3,'sources_failed':0,'memory_matches':1,'ai':'Extração híbrida: regras + (GLiNER opcional)'}

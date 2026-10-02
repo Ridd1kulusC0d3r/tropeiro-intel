@@ -1,11 +1,14 @@
+> **Manual de uso completo:** [USER_GUIDE.md](USER_GUIDE.md). Esta página descreve só a estrutura do front.
+
 # Investigation Workbench
 
 Front em **Gradio** (Python puro, roda no Colab ou local).
 
-```python
-from tropeiro.frontend.app import build_app
-build_app().launch()
+```bash
+tropeiro workbench
 ```
+
+Pelo Python: `launch_local()` (computador) ou `launch_colab_frontend()` (Colab) em `tropeiro.frontend.app`. Use-as em vez de `build_app().launch()`: no Gradio 6 o tema é aplicado no `launch()`, e estas funções cuidam disso.
 
 Abas: **Grafo** · **IOCs** (decisão BLOCK/HUNT/MONITOR) · **Isca e IA** · **Dados** (relações, ledger, saúde das fontes) · **Linha do tempo** · **Memória** · **Exportar** (STIX, MISP, Sigma, relatório, ZIP).
 

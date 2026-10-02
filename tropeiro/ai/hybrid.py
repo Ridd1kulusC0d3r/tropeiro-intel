@@ -11,6 +11,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional
 from rapidfuzz import fuzz
 from ..utils import refang, valid_hostname, root_domain
 from ..intelligence.br_lures import extract_lure_infra, detect_br_lures
+from ..intelligence.legit_domains import is_known_legit, _messaging
 from .core import extract_gliner_entities, DEFAULT_ENTITY_LABELS
 
 # rótulo do GLiNER -> tipo canônico do Tropeiro
@@ -57,6 +58,7 @@ def extract_hybrid(text: str, gliner: Any=None, labels: Optional[List[str]]=None
             kind=LABEL_MAP.get(e['label'].lower(),e['label'].lower())
             put(kind,e['value'],'gliner',e['score'],{'span':[e.get('start'),e.get('end')]})
     for row in found.values():
+        if row['type']=='domain' and is_known_legit(row['value']) or row['type']=='url' and _messaging(row['value']): row['legit_platform']=True
         if len(row['methods'])>1: row['score']=round(min(.99,row['score']+.08),3)   # concordância regra+modelo
         else: row['score']=round(row['score'],3)
         row['confidence']='HIGH' if row['score']>=.85 else 'MODERATE' if row['score']>=.6 else 'LOW'

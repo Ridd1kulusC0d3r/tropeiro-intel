@@ -47,3 +47,15 @@ def test_run_quick_case_lure_with_sources_down(monkeypatch,tmp_path):
     assert res['summary']['sources_failed']>0 and res['summary']['ai'].endswith('extração: regras')
     assert {p.rsplit('/',1)[-1] for p in res['exports']}>={'stix.json','misp.json'}
     assert len(render_outputs(res))==16
+
+def test_workbench_records_rdap_dates_in_ledger(monkeypatch,tmp_path):
+    from tropeiro.frontend import app as fe
+    monkeypatch.setattr(fe.tempfile,'gettempdir',lambda:str(tmp_path))
+    monkeypatch.setattr(fe.dns,'query',lambda *a,**k:[])
+    monkeypatch.setattr(fe.crtsh,'lookup',lambda *a,**k:[])
+    monkeypatch.setattr(fe.urlscan,'search',lambda *a,**k:{})
+    monkeypatch.setattr(fe.threatintel,'otx_domain',lambda *a,**k:{})
+    monkeypatch.setattr(fe.rdap,'lookup',lambda d:{'created':'2026-09-20T10:00:00Z','expires':'2027-09-20T10:00:00Z','registrar_orgs':['R'],'registrant_orgs':[]})
+    res=fe.run_quick_case('novo-dominio.example','DOMAIN',case_id='RDAP-1',memory_enabled=False)
+    srcs={(e['source'],e['value']) for e in res['evidence']}
+    assert ('rdap:created','2026-09-20T10:00:00Z') in srcs and ('rdap:expires','2027-09-20T10:00:00Z') in srcs

@@ -4,7 +4,7 @@ TLP_TAG={'WHITE':'tlp:white','CLEAR':'tlp:clear','GREEN':'tlp:green','AMBER':'tl
 
 def _hash_type(v): return {32:'md5',40:'sha1',64:'sha256'}.get(len(v),'sha256')
 
-def misp_event(case_id,iocs,info='Tropeiro Intel phishing investigation',tlp='AMBER',to_ids=None):
+def misp_event(case_id,iocs,info='Tropeiro Intel phishing investigation',tlp='AMBER',to_ids=None,context_only=None):
     """`to_ids`: conjunto de tipos que viram `to_ids=True`; padrão = IDS_BY_DEFAULT."""
     ids=IDS_BY_DEFAULT if to_ids is None else set(to_ids)
     mapping={'domain':'domain','url':'url','ip':'ip-dst','email':'email-dst','phone':'phone-number'}
@@ -17,5 +17,8 @@ def misp_event(case_id,iocs,info='Tropeiro Intel phishing investigation',tlp='AM
             else: continue
             attrs.append({'type':mtype,'category':cats.get(typ,'Network activity' if typ!='hash' else 'Payload delivery'),
                           'to_ids':typ in ids,'value':v,'comment':'Exported by Tropeiro Intel'})
+    for typ,vals in (context_only or {}).items():
+        if typ in mapping:
+            attrs+=[{'type':mapping[typ],'category':'Network activity','to_ids':False,'value':v,'comment':'Contexto (plataforma legítima): não bloquear'} for v in vals]
     tags=[{'name':TLP_TAG.get(str(tlp).upper(),'tlp:amber')},{'name':'type:phishing'}]
     return {'Event':{'info':f'{info} - {case_id}','distribution':0,'threat_level_id':2,'analysis':1,'Tag':tags,'Attribute':attrs}}

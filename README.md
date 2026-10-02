@@ -31,8 +31,8 @@ Evidência rastreável, correlação cautelosa e IA verificada — nunca prova a
 
 ```bash
 pip install -e ".[colab]"          # inclui Gradio
-python -c "from tropeiro.frontend.app import build_app; build_app().launch()"   # Workbench (botão "caso de demonstração" funciona sem rede)
-tropeiro lure examples/lure.txt --case C1 --out out/        # CLI offline: marca, IOCs, STIX/MISP/Sigma
+tropeiro workbench                 # Workbench em http://127.0.0.1:7860 (o botão "caso de demonstração" funciona sem rede)
+tropeiro lure examples/lure_receita.txt --case C1 --out out/   # CLI offline: marca, IOCs, STIX/MISP/Sigma
 ```
 
 Ou abra no **[Google Colab](https://colab.research.google.com/github/Ridd1kulusC0d3r/tropeiro-intel/blob/main/notebooks/Tropeiro_Intel_Official_Colab.ipynb)** — nenhuma API paga é necessária.
@@ -45,7 +45,23 @@ Ou abra no **[Google Colab](https://colab.research.google.com/github/Ridd1kulusC
 COLLECT → NORMALIZE → EVIDENCE → CORRELATE → ASSESS → ATTRIBUTE → DECIDE → PIVOT → REPORT
 ```
 
-Detalhes: [ARCHITECTURE](docs/ARCHITECTURE.md) · [Camada de IA](docs/AI.md) · [Workbench](docs/FRONTEND.md) · [Modelo de dados](docs/DATA_MODEL.md)
+Detalhes: [ARCHITECTURE](docs/ARCHITECTURE.md) · [Camada de IA](docs/AI.md) · [Modelo de dados](docs/DATA_MODEL.md)
+
+## Documentação
+
+| Quero... | Leia |
+|---|---|
+| primeira investigação em 5 minutos | [Início rápido](docs/QUICKSTART.md) |
+| usar o Workbench aba por aba | [Guia do Workbench](docs/USER_GUIDE.md) |
+| analisar uma isca pela linha de comando | [CLI](docs/CLI.md) |
+| seguir um passo a passo (triagem, takedown, regras...) | [Receitas](docs/COOKBOOK.md) |
+| entender BLOCK / HUNT / MONITOR | [Interpretando resultados](docs/INTERPRETING_RESULTS.md) |
+| instalar e configurar chaves, cache, memória | [Instalação](docs/INSTALLATION.md) · [Configuração](docs/CONFIGURATION.md) |
+| formatos STIX / MISP / Sigma | [Saídas](docs/OUTPUTS.md) |
+| usar como biblioteca Python | [API Python](docs/PYTHON_API.md) |
+| tirar dúvidas | [FAQ](docs/FAQ.md) · [Erros comuns](docs/COMMON_ERRORS.md) |
+
+Índice completo: [docs/README.md](docs/README.md).
 
 ## Capturas
 

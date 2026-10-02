@@ -61,7 +61,8 @@ def test_br_lures_and_validators():
 
 def test_sigma_rules_drop_invalid_domains():
     r=sigma_rules({'domain':['evil.example','bad/../x'],'ip':['203.0.113.9']},'C1')
-    assert "'evil.example'" in r['dns'] and 'bad/' not in r['dns'] and "'203.0.113.9'" in r['network']
+    assert "'evil.example'" in r['dns'] and "'.evil.example'" in r['dns'] and 'bad/' not in r['dns'] and "'203.0.113.9'" in r['network']
+    assert 'condition: selection or selection_sub' in r['dns']
     assert sigma_rules({},'C1')=={}
 
 def test_calibration_report():
@@ -75,3 +76,24 @@ def test_cli_lure_exports(tmp_path,capsys):
     assert main(['lure',str(f),'--case','C9','--out',str(tmp_path/'o')])==0
     assert {p.name for p in (tmp_path/'o').iterdir()}>={'stix.json','misp.json','sigma_dns.yml'}
     assert 'Correios' in capsys.readouterr().out
+
+def test_lure_infra_refangs_and_partitions_legit_platforms():
+    from tropeiro.intelligence.legit_domains import partition_iocs, is_known_legit
+    txt='Receita: hxxps://receita-regulariza[.]example/cpf ou https://wa.me/5511999990000'
+    out=extract_lure_infra(txt)
+    assert 'receita-regulariza.example' in out['domain'] and out['whatsapp']==['5511999990000']
+    act,ctx=partition_iocs(out)
+    assert 'wa.me' in ctx['domain'] and 'wa.me' not in act.get('domain',[])
+    assert 'https://wa.me/5511999990000' in ctx['url'] and 'receita-regulariza.example' in act['domain']
+    assert is_known_legit('docs.google.com') and not is_known_legit('google.com.evil.example')
+    assert partition_iocs({'url':['https://docs.google.com/forms/x']})[0]['url']   # URL específica segue acionável
+
+def test_exports_keep_legit_as_context_only():
+    from tropeiro.reporting.stix import bundle_from_iocs
+    from tropeiro.reporting.misp import misp_event
+    b=bundle_from_iocs({'domain':['evil.example']},case_id='C',context_only={'domain':['wa.me']})
+    pats=[o['pattern'] for o in b.objects if o['type']=='indicator']
+    assert pats==["[domain-name:value = 'evil.example']"]
+    assert any(o['type']=='domain-name' and o['value']=='wa.me' for o in b.objects)
+    ev=misp_event('C',{'domain':['evil.example']},context_only={'domain':['wa.me']})['Event']['Attribute']
+    assert {a['value']:a['to_ids'] for a in ev}=={'evil.example':True,'wa.me':False}

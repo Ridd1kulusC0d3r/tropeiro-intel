@@ -11,7 +11,7 @@ O Assistente Guiado muda o nome do campo de entrada conforme o tipo selecionado.
 | Hash | SHA256/SHA1/MD5 | preserva para correlação e providers de threat intelligence compatíveis |
 | Telefone | número já observado no caso | usa como IOC/correlação; não é reverse lookup de pessoa |
 | Vários IOCs | um por linha | separa os tipos automaticamente |
-| Texto da isca | mensagem recebida | extrai IOCs e alimenta análise de idioma, victimology e objetivo |
+| Texto da isca | mensagem recebida | extrai IOCs, marca/tema, CPF/CNPJ válidos, PIX e WhatsApp; separa plataformas legítimas; alimenta victimology e objetivo |
 
 ## Detectar automaticamente
 
@@ -45,3 +45,19 @@ O pipeline mantém cada tipo separado no inventário.
 ## Privacidade
 
 E-mails e telefones devem ser indicadores já presentes numa investigação defensiva. O projeto não foi desenhado para encontrar endereço, identidade real ou outros dados privados de uma pessoa.
+
+## Texto da isca: o que é extraído
+
+Cole a mensagem inteira (aceita defang `hxxps://x[.]com`). O Tropeiro extrai:
+
+| Item | Observação |
+|---|---|
+| domínios, URLs, IPs, e-mails, hashes | com validação de formato |
+| telefones | normalizados (10 a 13 dígitos) |
+| **CPF e CNPJ** | só se o **dígito verificador** estiver correto |
+| **chave PIX aleatória** e **PIX copia-e-cola** | padrão do Banco Central |
+| **WhatsApp** | `wa.me/<número>` e `api.whatsapp.com/send?phone=<número>` |
+| **marca e tema** | Receita Federal, Correios, PIX, Detran/CNH, banco, INSS/Gov.br (regras editáveis) |
+| entidades de contexto | organização, registrar... com GLiNER (opcional) |
+
+Domínios e URLs de **plataformas legítimas** (WhatsApp, Telegram, Google...) ficam como contexto e não viram regra de bloqueio. Veja [INTERPRETING_RESULTS](INTERPRETING_RESULTS.md#plataformas-legítimas).

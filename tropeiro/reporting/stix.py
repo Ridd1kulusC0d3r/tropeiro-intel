@@ -10,9 +10,10 @@ NS=uuid.UUID('7b1d2f4a-0c5e-4a9b-9d3e-5a6f1c2b8e01')
 
 def _esc(v): return str(v).replace('\\','\\\\').replace("'","\\'")
 
-def bundle_from_iocs(iocs,case_id=None,tlp='AMBER',confidence=None,valid_days=90,campaign_name=None):
+def bundle_from_iocs(iocs,case_id=None,tlp='AMBER',confidence=None,valid_days=90,campaign_name=None,context_only=None):
     """Observáveis (como antes) + Indicators com validade, Campaign e Relationships.
 
+    `context_only`: IOCs de plataformas legítimas; entram só como observáveis, sem Indicator.
     `confidence` é 0-100 (escala STIX); se None, os Indicators não declaram confiança.
     IDs são determinísticos (uuid5) para o mesmo caso+valor: reexportar não duplica no TIP.
     """
@@ -38,6 +39,8 @@ def bundle_from_iocs(iocs,case_id=None,tlp='AMBER',confidence=None,valid_days=90
             objs.append(ind)
             objs.append(Relationship(ind,'based-on',s))
             if camp: objs.append(Relationship(ind,'indicates',camp))
+    for typ,sco in SCO.items():
+        for v in (context_only or {}).get(typ,[]): objs.append(sco(value=v))
     return Bundle(*objs,allow_custom=True)
 
 def validate(serialized): return parse(serialized,allow_custom=True)

@@ -6,4 +6,4 @@ license: Apache-2.0
 repository-code: "https://github.com/Ridd1kulusC0d3r/tropeiro-intel"
 abstract: "Campaign intelligence for phishing investigations: evidence ledger, guarded correlation, verified AI extraction, STIX/MISP/Sigma export."
 keywords: [osint, phishing, threat-intelligence, stix, misp, sigma, brazil]
-version: 4.6.0
+version: 4.6.1
