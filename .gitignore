@@ -13,3 +13,4 @@ venv/
 reports/
 exports/
 artifacts/
+*.egg-info/

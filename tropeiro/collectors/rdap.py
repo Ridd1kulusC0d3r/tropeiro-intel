@@ -1,4 +1,5 @@
 from ..http import get
+from ..utils import valid_hostname
 
 def _vcard(entity):
     data={}
@@ -13,7 +14,9 @@ def _vcard(entity):
     return data
 
 def lookup(domain):
-    d=get(f'https://rdap.org/domain/{domain}')
+    dom=valid_hostname(domain)
+    if not dom: raise ValueError(f'hostname inválido: {domain!r}')
+    d=get(f'https://rdap.org/domain/{dom}')
     events={e.get('eventAction'):e.get('eventDate') for e in d.get('events',[])}
     entities=[]
     for e in d.get("entities",[]) or []:

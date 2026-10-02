@@ -46,3 +46,12 @@ def extract_iocs(text):
         h=hostname(u)
         if h: out['domain'].add(h)
     return {k:sorted(v) for k,v in out.items()}
+
+RE_HOSTNAME=re.compile(r'^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$')
+
+def valid_hostname(value):
+    """Hostname seguro para entrar em URL de coletor (sem '/', '?', '&', espaços)."""
+    h=(value or '').strip().lower().rstrip('.')
+    try: h=h.encode('idna').decode('ascii')
+    except UnicodeError: return None
+    return h if RE_HOSTNAME.match(h) else None
