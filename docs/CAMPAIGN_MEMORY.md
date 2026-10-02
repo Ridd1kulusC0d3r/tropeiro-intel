@@ -37,7 +37,7 @@ Every match explicitly sets `same_operator_inferred = false`.
 
 ## Python API
 
-```python
+```python no-run
 from tropeiro.memory import CaseMemory
 
 memory = CaseMemory('/path/to/tropeiro_case_memory.sqlite')

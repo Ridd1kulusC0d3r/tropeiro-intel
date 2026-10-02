@@ -61,3 +61,47 @@ Algumas consultas externas levam tempo. Espere a célula finalizar antes de clic
 ## Pedi BLOCK e apareceu MONITOR/HUNT
 
 Isso é intencional. O Tropeiro exige evidência, atividade, diversidade de fontes e controle de falso positivo antes de recomendar enforcement.
+
+---
+
+# Erros comuns no Workbench e na CLI
+
+## `ModuleNotFoundError: No module named 'gradio'`
+
+Instalou sem o extra do Workbench. Rode `pip install -e ".[colab]"`.
+
+## Workbench abre sem o tema escuro (texto claro em fundo claro)
+
+Costuma ser Gradio incompatível ou o app aberto por `build_app().launch()` no Gradio 6. Abra com `tropeiro workbench` (ou `launch_local()` / `launch_colab_frontend()`) e use `gradio>=4.44,<7`.
+
+## `tropeiro: command not found`
+
+Ambiente virtual inativo ou instalação sem `-e`. Ative o venv, ou use `python -m tropeiro.cli ...`.
+
+## `ValueError: hostname inválido: '...'`
+
+O alvo tem `/`, `?`, `&`, espaço ou não é um domínio válido. Passe só o domínio (`exemplo.com`) ou use o tipo `URL`/`LURE_TEXT` para o texto completo.
+
+## A CLI lista só o domínio de uma plataforma (ex.: `wa.me`) e não o do golpe
+
+Versões anteriores à 4.6.1 não faziam refang na CLI: `hxxps://x[.]example` não era lido. Atualize (`git pull && pip install -e .`).
+
+## Aparece `somente_contexto` com o domínio que eu queria bloquear
+
+O domínio está na lista de plataformas legítimas (`tropeiro/intelligence/legit_domains.py`). Bloquear `google.com`/`wa.me` inteiro quebra usuários. Bloqueie a URL específica ou o número, não a plataforma.
+
+## `lures` vem vazio
+
+Nenhuma regra de marca/tema bateu. Não significa que a mensagem seja legítima. Adicione suas regras ([CONFIGURATION](CONFIGURATION.md#regras-de-iscas-brasileiras)).
+
+## Caso rápido sem data de registro
+
+Versões anteriores à 4.6.1 não gravavam `rdap:created` no ledger. Atualize.
+
+## Memória "some" entre sessões do Colab
+
+O arquivo padrão fica em `/content` e é apagado com o runtime. Aponte para o Drive ([CONFIGURATION](CONFIGURATION.md#campaign-memory)).
+
+## Muitas fontes `UNAVAILABLE` ao mesmo tempo
+
+Provável limite de taxa ou rede bloqueada. Aumente o intervalo (`http.MIN_INTERVAL = 2.0`), ligue o cache (`http.set_cache(...)`) e tente de novo.

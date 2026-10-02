@@ -19,7 +19,7 @@ from ..intelligence.warninglists import WarningListEngine
 from ..intelligence.decision_objects import build_ioc_decisions
 from ..reporting.context import build_report_data
 from ..reporting.rich_html import build_report
-from ..reporting.exporter import export_selected, zip_exports
+from ..reporting.exporter import export_selected, zip_exports, write_manifest
 from ..onboarding import detect_input_type
 from ..memory import CaseMemory, default_memory_path
 from ..ai import (
@@ -31,6 +31,7 @@ from ..timeline import build_timeline, timeline_markdown
 from ..reporting.stix import bundle_from_iocs
 from ..reporting.misp import misp_event
 from ..intelligence.sigma import sigma_rules
+from ..intelligence.legit_domains import partition_iocs
 
 from .views import APP_CSS, HERO, kpi_html, graph_svg, lure_html, edges_rows, ioc_rows
 
@@ -150,6 +151,9 @@ def run_quick_case(
             _observe(obs,domain,"domain","rdap:registrant_org",org)
         for org in r.get("registrar_orgs",[]) or []:
             _observe(obs,domain,"domain","rdap:registrar_org",org)
+        for key in ("created","updated","expires"):
+            if r.get(key):
+                _observe(obs,domain,"domain",f"rdap:{key}",r[key])
         ct=_safe("crt.sh",crtsh.lookup,status,domain) or []
         names=set()
         for row in ct if isinstance(ct,list) else []:
@@ -277,12 +281,14 @@ def run_quick_case(
         {"report_html","case_json","evidence_ledger_csv","ioc_decisions_csv"},
         report_path
     )
-    all_iocs={k:v for k,v in iocs.items() if k in ("domain","url","ip","email","hash","phone")}
+    all_iocs,ctx_iocs=partition_iocs({k:v for k,v in iocs.items() if k in ("domain","url","ip","email","hash","phone")})
     cti_dir=workspace/"export"; cti_dir.mkdir(parents=True,exist_ok=True)
-    (cti_dir/"stix.json").write_text(bundle_from_iocs(all_iocs,case_id=case_id).serialize(pretty=True),encoding="utf-8")
-    (cti_dir/"misp.json").write_text(json.dumps(misp_event(case_id,all_iocs),ensure_ascii=False,indent=2),encoding="utf-8")
+    (cti_dir/"stix.json").write_text(bundle_from_iocs(all_iocs,case_id=case_id,context_only=ctx_iocs).serialize(pretty=True),encoding="utf-8")
+    (cti_dir/"misp.json").write_text(json.dumps(misp_event(case_id,all_iocs,context_only=ctx_iocs),ensure_ascii=False,indent=2),encoding="utf-8")
     for k,v in sigma_rules(all_iocs,case_id).items(): (cti_dir/f"sigma_{k}.yml").write_text(v+"\n",encoding="utf-8")
-    cti_files=sorted(str(x) for x in cti_dir.glob("stix.json"))+sorted(str(x) for x in cti_dir.glob("misp.json"))+sorted(str(x) for x in cti_dir.glob("sigma_*.yml"))
+    cti_files=sorted(str(x) for x in [cti_dir/"stix.json",cti_dir/"misp.json",*cti_dir.glob("sigma_*.yml")] if Path(x).exists())
+    created=[c for c in created if Path(c).name!="manifest.json"]+[Path(x) for x in cti_files]
+    created.append(write_manifest(created,cti_dir))
     zip_path=zip_exports(created,workspace/f"Tropeiro_{case_id}_Package.zip")
 
     step(1.0,"Concluído")
@@ -414,6 +420,11 @@ def build_app():
         demo.click(load_demo,outputs=[target,target_type,*outs])
     app.launch_style={} if legacy else style
     return app
+
+def launch_local(server_port: int=7860, share: bool=False):
+    """Abre o Workbench no navegador local e bloqueia até Ctrl+C."""
+    app=build_app()
+    app.launch(server_name="127.0.0.1",server_port=server_port,share=share,show_error=True,**app.launch_style)
 
 def launch_colab_frontend(server_port: int=7860, inline: bool=True):
     app=build_app()

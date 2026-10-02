@@ -37,3 +37,53 @@
 **SKIPPED** — módulo não executado por configuração, falta de chave, budget ou irrelevância. Não significa erro.
 
 **UNAVAILABLE** — módulo tentou executar, mas a fonte não respondeu corretamente.
+
+## Formatos e padrões
+
+**Defang / refang** — defang altera um IOC para que não seja clicável (`hxxps://x[.]com`); refang desfaz. O Tropeiro faz refang automaticamente na entrada.
+
+**TLP** — Traffic Light Protocol: `WHITE/CLEAR`, `GREEN`, `AMBER`, `RED`; define com quem a informação pode ser compartilhada.
+
+**STIX 2.1** — formato aberto de inteligência de ameaças. No Tropeiro: `Indicator`, `Campaign`, observáveis e `Relationship`.
+
+**Indicator (STIX)** — regra/padrão que identifica algo malicioso, com período de validade.
+
+**MISP** — plataforma de compartilhamento de inteligência. `to_ids` indica se o atributo pode ser usado em detecção/bloqueio automático.
+
+**Sigma** — formato aberto de regras de detecção que converte para vários SIEMs.
+
+**TIP** — Threat Intelligence Platform (MISP, OpenCTI etc.).
+
+## Conceitos do Tropeiro
+
+**Observado × derivado** — observado: uma fonte respondeu. Derivado: calculado a partir de observações (similaridade, ligação da IA). Derivado é indício.
+
+**Plataforma legítima** — serviço comum (WhatsApp, Google) que aparece na isca; é contexto, não alvo de bloqueio.
+
+**Campaign Memory** — banco local de casos anteriores, com prevalência e raridade de artefatos.
+
+**Prevalência / raridade** — quão comum um artefato é nos seus casos. Comum pesa pouco; raro pesa muito.
+
+**Fingerprint de kit** — assinatura dos arquivos estáticos de um kit de phishing; domínios com o mesmo kit podem ser da mesma campanha.
+
+**Lote de registro** — domínios criados em sequência, no mesmo registrar e nameservers.
+
+**Banda de confiança** — `HIGH`, `MODERATE`, `LOW`, `INSUFFICIENT`.
+
+**Brier score** — erro quadrático médio entre a probabilidade prevista e o resultado real (0 = perfeito; 0,25 = chute 50%).
+
+## IA
+
+**GLiNER** — modelo que extrai entidades nomeadas (organização, marca...) sem treino específico. Roda local.
+
+**Qwen** — modelo de linguagem usado para resumir a evidência do caso; só enxerga o pacote de evidência e tem as citações validadas.
+
+**Evidence packet** — o recorte do caso entregue ao modelo, com hash SHA-256.
+
+## Brasil
+
+**CPF / CNPJ** — documentos de pessoa física/jurídica; o Tropeiro só aceita os que passam no dígito verificador.
+
+**PIX** — pagamento instantâneo do Banco Central. **Chave aleatória (EVP)** é um UUID; **copia-e-cola** é o código `000201...` do QR.
+
+**Receita Federal, Correios, Detran, INSS** — marcas frequentemente imitadas em iscas.

@@ -1,6 +1,6 @@
 """Iscas brasileiras: marca/tema por regras editáveis + infraestrutura de pagamento/contato no texto."""
 import json, re
-from ..utils import extract_iocs
+from ..utils import extract_iocs, refang
 
 # (marca, tema, palavras-chave em minúsculas). Edite aqui ou passe `rules=` / load_rules('arquivo.json').
 RULES=[
@@ -47,7 +47,7 @@ RE_WA=re.compile(r'(?:wa\.me/|api\.whatsapp\.com/send\?phone=|whatsapp\.com/send
 
 def extract_lure_infra(text):
     """IOCs padrão + CPF/CNPJ (só com dígito verificador válido), chave PIX aleatória, PIX copia-e-cola e WhatsApp."""
-    out=extract_iocs(text); text=text or ''
+    text=refang(text); out=extract_iocs(text)
     cpf=sorted({re.sub(r'\D','',x) for x in RE_CPF.findall(text) if valid_cpf(x)})
     cnpj=sorted({re.sub(r'\D','',x) for x in RE_CNPJ.findall(text) if valid_cnpj(x)})
     if cpf: out['cpf']=cpf

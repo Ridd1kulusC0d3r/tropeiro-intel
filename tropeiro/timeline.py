@@ -15,9 +15,13 @@ def timeline_summary(events):
         if e.get('source'): r['sources'].add(e['source'])
     return {k:{**v,'sources':sorted(v['sources'])} for k,v in sorted(out.items(),key=lambda kv:kv[1]['first_seen'])}
 
+def _short(ts):
+    """2026-09-25T08:30:00.123+00:00 -> 2026-09-25 08:30"""
+    return str(ts)[:16].replace('T',' ')
+
 def timeline_markdown(events):
     """Linha do tempo em Markdown para colar em relatório."""
     lines=['| Primeira vez | Última vez | Entidade | Obs. | Fontes |','|---|---|---|---|---|']
     for ent,r in timeline_summary(events).items():
-        lines.append(f"| {r['first_seen']} | {r['last_seen']} | `{ent}` | {r['observations']} | {', '.join(r['sources'])} |")
+        lines.append(f"| {_short(r['first_seen'])} | {_short(r['last_seen'])} | `{ent}` | {r['observations']} | {', '.join(r['sources'])} |")
     return '\n'.join(lines)

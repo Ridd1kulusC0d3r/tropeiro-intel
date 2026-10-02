@@ -13,7 +13,7 @@ _cache=None
 def set_cache(path=None,ttl=3600):
     """Ativa cache em disco para GETs. `set_cache(None)` desativa."""
     global _cache
-    _cache=FileCache(Path(path),ttl) if path else None
+    _cache=FileCache(Path(path).expanduser(),ttl) if path else None
 
 def _throttle(url):
     host=urllib.parse.urlsplit(url).hostname or ''

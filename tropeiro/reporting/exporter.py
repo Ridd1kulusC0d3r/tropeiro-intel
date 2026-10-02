@@ -15,6 +15,12 @@ def _write_csv(path,rows):
         w=csv.DictWriter(f,fieldnames=cols,extrasaction='ignore');w.writeheader()
         for r in rows:w.writerow({k:(json.dumps(v,ensure_ascii=False) if isinstance(v,(dict,list)) else v) for k,v in r.items()})
 
+def write_manifest(files,out_dir):
+    """manifest.json com SHA-256 de cada arquivo (exceto o próprio manifest). Retorna o caminho."""
+    out=Path(out_dir)
+    manifest=[{'file':Path(p).name,'sha256':hashlib.sha256(Path(p).read_bytes()).hexdigest(),'bytes':Path(p).stat().st_size} for p in files if Path(p).name!='manifest.json']
+    mp=out/'manifest.json';mp.write_text(json.dumps(manifest,indent=2),encoding='utf-8');return mp
+
 def export_selected(case_data,output_dir,selections,report_path=None):
     out=Path(output_dir);out.mkdir(parents=True,exist_ok=True);created=[]
     mapping={
@@ -31,8 +37,7 @@ def export_selected(case_data,output_dir,selections,report_path=None):
         if fmt=='json':p.write_text(json.dumps(obj,ensure_ascii=False,indent=2,default=str),encoding='utf-8')
         else:_write_csv(p,obj)
         created.append(p)
-    manifest=[{'file':p.name,'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'bytes':p.stat().st_size} for p in created]
-    mp=out/'manifest.json';mp.write_text(json.dumps(manifest,indent=2),encoding='utf-8');created.append(mp);return created
+    created.append(write_manifest(created,out));return created
 
 def zip_exports(files,zip_path):
     zp=Path(zip_path)

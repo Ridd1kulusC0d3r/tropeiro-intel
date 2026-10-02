@@ -63,6 +63,7 @@ def lure_html(lures: List[Mapping[str,Any]], entities: List[Mapping[str,Any]]) -
     rows=''
     for e in entities[:60]:
         meth=''.join(f"<span class='ti-badge ti-{_e(m)}'>{_e(METHOD_LABEL.get(m,m))}</span>" for m in e.get('methods',[]))
+        if e.get('legit_platform'): meth+="<span class='ti-badge ti-legit'>PLATAFORMA LEGÍTIMA</span>"
         pct=int(float(e.get('score',0))*100)
         rows+=(f"<tr><td><span class='ti-type'>{_e(e.get('type'))}</span></td><td class='ti-mono'>{_e(e.get('value'))}</td><td>{meth}</td>"
                f"<td><div class='ti-bar'><i style='width:{pct}%'></i></div><span class='ti-note'>{pct}% · {_e(e.get('confidence',''))}</span></td></tr>")
@@ -115,5 +116,6 @@ footer{display:none!important}
 .ti-type{font:600 11px ui-monospace,monospace;color:var(--muted);text-transform:uppercase}
 .ti-badge{font:700 10px ui-monospace,monospace;padding:3px 7px;border-radius:6px;margin-right:4px;letter-spacing:.06em}
 .ti-rule{background:#E8A33D22;color:var(--acc)}.ti-gliner{background:#9B8CFF22;color:var(--ai)}
+.ti-legit{background:#4FB3BF22;color:#4FB3BF}
 .ti-bar{height:6px;background:#1B1F26;border-radius:4px;width:120px;margin-bottom:3px}.ti-bar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--ai),var(--acc))}
 """
