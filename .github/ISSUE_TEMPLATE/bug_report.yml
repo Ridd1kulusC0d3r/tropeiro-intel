@@ -1,0 +1,11 @@
+name: Bug
+description: Algo quebrou ou deu resultado incorreto
+labels: [bug]
+body:
+  - type: textarea
+    attributes: {label: O que aconteceu, description: "Inclua o tipo de alvo (domínio, isca...) mas NÃO cole dados sensíveis de vítimas"}
+    validations: {required: true}
+  - type: textarea
+    attributes: {label: Como reproduzir}
+  - type: input
+    attributes: {label: Versão, placeholder: "4.6.0 · Python 3.11 · Colab/local"}
