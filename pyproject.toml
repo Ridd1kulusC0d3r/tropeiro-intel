@@ -16,8 +16,8 @@ dependencies = ["tldextract", "rapidfuzz", "pandas", "networkx", "stix2"]
 tropeiro = "tropeiro.cli:main"
 
 [project.optional-dependencies]
-colab = ["dnstwist", "ipywidgets", "gradio>=4.44,<6"]
-colab-full = ["dnstwist[full]", "ipywidgets", "gradio>=4.44,<6"]
+colab = ["dnstwist", "ipywidgets", "gradio>=4.44,<7"]
+colab-full = ["dnstwist[full]", "ipywidgets", "gradio>=4.44,<7"]
 ai = ["gliner", "transformers>=4.51.0", "accelerate>=1.0"]
 dev = ["pytest>=8", "ruff"]
 
