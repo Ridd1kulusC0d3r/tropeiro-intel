@@ -105,3 +105,7 @@ O arquivo padrão fica em `/content` e é apagado com o runtime. Aponte para o D
 ## Muitas fontes `UNAVAILABLE` ao mesmo tempo
 
 Provável limite de taxa ou rede bloqueada. Aumente o intervalo (`http.MIN_INTERVAL = 2.0`), ligue o cache (`http.set_cache(...)`) e tente de novo.
+
+## GLiNER: `SentencePieceExtractor requires the protobuf library` / `tiktoken is required to read a tiktoken file`
+
+O tokenizador do GLiNER multilíngue (mDeBERTa) precisa de `sentencepiece` e `protobuf` com o `transformers` recente. O extra `ai` os instala a partir da 4.7; antes, rode `pip install sentencepiece protobuf` e reinicie o runtime.

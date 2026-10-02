@@ -1,6 +1,7 @@
 from __future__ import annotations
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
@@ -101,8 +102,9 @@ class GLiNERLocal:
         return extract_gliner_entities(texts,self.load(),labels=labels,threshold=self.threshold)
 
 class QwenLocalChat:
-    def __init__(self,model_name: Optional[str]=None,thinking: bool=False):
+    def __init__(self,model_name: Optional[str]=None,thinking: bool=False,deterministic: bool=True):
         profile=runtime_profile()
+        self.deterministic=deterministic   # análise de evidência não deve variar entre execuções
         self.model_name=model_name or profile["recommended_qwen_model"]
         self.thinking=thinking
         self._tokenizer=None
@@ -122,7 +124,10 @@ class QwenLocalChat:
         except TypeError:
             text=tok.apply_chat_template(messages,**kwargs)
         inputs=tok([text],return_tensors="pt").to(model.device)
-        gen={"max_new_tokens":max_new_tokens,"do_sample":True,"temperature":.6 if self.thinking else .7,"top_p":.95 if self.thinking else .8,"top_k":20}
+        if self.deterministic:
+            gen={"max_new_tokens":max_new_tokens,"do_sample":False}
+        else:
+            gen={"max_new_tokens":max_new_tokens,"do_sample":True,"temperature":.6 if self.thinking else .7,"top_p":.95 if self.thinking else .8,"top_k":20}
         ids=model.generate(**inputs,**gen)
         out=ids[0][len(inputs.input_ids[0]):]
         return tok.decode(out,skip_special_tokens=True).strip()
@@ -173,7 +178,9 @@ def analysis_request(packet: Mapping[str,Any]) -> str:
         "detection_opportunities":[{"surface":"dns|proxy|email|identity|other","idea":"string","evidence_refs":["EV-ID"]}],
         "caveats":["string"]
     }
-    return "Schema de saida: "+json.dumps(schema,ensure_ascii=False)+" EVIDENCE_PACKET: "+json.dumps(packet,ensure_ascii=False,default=str)
+    valid=sorted(allowed_evidence_refs(packet))[:60]
+    return ("Schema de saida: "+json.dumps(schema,ensure_ascii=False)+" IDS_DE_EVIDENCIA_VALIDOS (use SOMENTE estes em evidence_refs; \"EV-ID\" e apenas um exemplo): "
+            +json.dumps(valid)+" EVIDENCE_PACKET: "+json.dumps(packet,ensure_ascii=False,default=str))
 
 def parse_json_response(text: str) -> Dict[str,Any]:
     raw=str(text or "").strip()
@@ -203,14 +210,60 @@ def validate_ai_analysis(value: Mapping[str,Any],packet: Mapping[str,Any]) -> Di
     result["_validation"]={"allowed_evidence_refs":len(allowed),"warnings":warnings,"evidence_packet_sha256":packet.get("packet_sha256")}
     return result
 
-def enforce_evidence_support(analysis: Dict[str,Any]) -> Dict[str,Any]:
-    """Achado sem nenhuma referência válida não pode ser 'observed' nem ter confiança alta."""
-    downgraded=0
+def _evidence_texts(packet):
+    """{evidence_id: texto minúsculo da entidade/valor/fonte} para checar se a afirmação fala daquela evidência."""
+    out={}
+    for row in (packet or {}).get("evidence_ledger",[]) or []:
+        if not isinstance(row,dict): continue
+        for key in ("evidence_id","id","event_id"):
+            if row.get(key):
+                out[str(row[key])]=" ".join(str(row.get(k,"")) for k in ("entity","value","source","notes")).lower().strip()
+    return out
+
+def _supports(statement,evidence_text):
+    """Heurística conservadora: a afirmação cita o valor/entidade da evidência, ou ela contém palavra longa da afirmação."""
+    st=statement.lower()
+    if not evidence_text: return True          # sem texto para comparar: não dá para contestar
+    ent=[w for w in re.split(r"\s+",evidence_text) if len(w)>=4]
+    if any(w in st for w in ent): return True
+    words={w for w in re.findall(r"[a-z0-9áéíóúâêôãõç]{5,}",st)}
+    return any(w in evidence_text for w in words)
+
+def enforce_evidence_support(analysis: Dict[str,Any], packet: Optional[Mapping[str,Any]]=None) -> Dict[str,Any]:
+    """Rebaixa achados que o modelo não consegue sustentar.
+
+    1. sem nenhuma referência válida: nunca `observed` nem confiança alta;
+    2. com `packet`: referência existe, mas a afirmação não fala daquela evidência (`evidence_mismatch`);
+    3. hipótese sem nenhuma referência de apoio vira `INSUFFICIENT` (`no_support`); detecção sem referência é marcada; hipótese que usa a mesma referência como apoio e como contradição perde a contradição.
+    Referência válida não basta: modelos pequenos citam ids reais para afirmações sem relação.
+    """
+    downgraded=mismatched=0; texts=_evidence_texts(packet)
     for row in analysis.get("key_findings",[]) or []:
-        if isinstance(row,dict) and not row.get("evidence_refs"):
-            if row.get("analytic_type")=="observed" or row.get("confidence") in ("HIGH","MODERATE"):
-                row["analytic_type"]="hypothesis"; row["confidence"]="INSUFFICIENT"; downgraded+=1
-    analysis.setdefault("_validation",{})["downgraded_findings"]=downgraded
+        if not isinstance(row,dict): continue
+        refs=row.get("evidence_refs") or []
+        why=None
+        if not refs: why="no_evidence"
+        elif texts and not any(_supports(f"{row.get('statement','')} {row.get('basis','')}",texts.get(r,"")) for r in refs):
+            why="evidence_mismatch"; mismatched+=1
+        if why and (row.get("analytic_type")=="observed" or row.get("confidence") in ("HIGH","MODERATE")):
+            row["analytic_type"]="hypothesis"; row["confidence"]="INSUFFICIENT" if why=="no_evidence" else "LOW"; downgraded+=1
+        if why: row["_flag"]=why; row["_flags"]=[why]
+    def flag(row,name):
+        row.setdefault("_flags",[]).append(name); row.setdefault("_flag",name)
+    for row in analysis.get("hypotheses",[]) or []:
+        if not isinstance(row,dict): continue
+        both=set(row.get("support_refs") or [])&set(row.get("contradiction_refs") or [])
+        if both:
+            row["contradiction_refs"]=[r for r in row["contradiction_refs"] if r not in both]; flag(row,"refs_overlap")
+        if not row.get("support_refs"):
+            if row.get("confidence") in ("HIGH","MODERATE","LOW"): row["confidence"]="INSUFFICIENT"; downgraded+=1
+            flag(row,"no_support")
+        elif texts and not any(_supports(str(row.get("hypothesis","")),texts.get(r,"")) for r in row["support_refs"]):
+            flag(row,"evidence_mismatch"); mismatched+=1
+            if row.get("confidence") in ("HIGH","MODERATE"): row["confidence"]="LOW"; downgraded+=1
+    for row in analysis.get("detection_opportunities",[]) or []:
+        if isinstance(row,dict) and not row.get("evidence_refs"): row["_flag"]="no_evidence"
+    v=analysis.setdefault("_validation",{}); v["downgraded_findings"]=downgraded; v["mismatched_findings"]=mismatched
     return analysis
 
 def run_qwen_analysis(chat: QwenLocalChat,packet: Mapping[str,Any],language: str="pt-BR",max_new_tokens: int=1200,retry: bool=True) -> Dict[str,Any]:
@@ -220,7 +273,7 @@ def run_qwen_analysis(chat: QwenLocalChat,packet: Mapping[str,Any],language: str
         fix="Sua resposta anterior nao era JSON valido. Reenvie SOMENTE o JSON do schema, sem texto extra. Resposta anterior: "+raw[:3000]
         parsed=parse_json_response(chat.chat(ai_system_prompt(language),fix,max_new_tokens=max_new_tokens))
         if parsed["status"]!="RAW_TEXT": parsed["status"]="OK_RETRY"
-    data=enforce_evidence_support(validate_ai_analysis(parsed["data"],packet))
+    data=enforce_evidence_support(validate_ai_analysis(parsed["data"],packet),packet)
     data["_generation_status"]=parsed["status"]
     return data
 

@@ -13,25 +13,28 @@ import pandas as pd
 from ..models import Observation, now_iso
 from ..utils import extract_iocs, hostname, root_domain, refang
 from ..config import Settings
-from ..collectors import dns, rdap, crtsh, urlscan, threatintel
+from ..collectors import dns, rdap, crtsh, urlscan, threatintel, history
+from . import enrich
+from .. import http
+from ..correlation.registration import registration_batches
 from ..evidence.ledger import build as build_ledger
 from ..intelligence.warninglists import WarningListEngine
 from ..intelligence.decision_objects import build_ioc_decisions
 from ..reporting.context import build_report_data
 from ..reporting.rich_html import build_report
 from ..reporting.exporter import export_selected, zip_exports, write_manifest
-from ..onboarding import detect_input_type
+from ..onboarding import detect_input_type, recommended_features, budget_limits
 from ..memory import CaseMemory, default_memory_path
 from ..ai import (
     GLiNERLocal, QwenLocalChat, build_ai_text_corpus, build_evidence_packet,
-    run_qwen_analysis, attach_ai_overlay, runtime_profile, extract_hybrid, correlate_entities
+    run_qwen_analysis, attach_ai_overlay, runtime_profile, extract_hybrid, correlate_entities, lure_similarity
 )
 from ..intelligence.br_lures import detect_br_lures
 from ..timeline import build_timeline, timeline_markdown
 from ..reporting.stix import bundle_from_iocs
 from ..reporting.misp import misp_event
 from ..intelligence.sigma import sigma_rules
-from ..intelligence.legit_domains import partition_iocs
+from ..intelligence.legit_domains import partition_iocs, is_known_legit
 
 from .views import APP_CSS, HERO, kpi_html, graph_svg, lure_html, edges_rows, ioc_rows
 
@@ -125,6 +128,7 @@ def run_quick_case(
     base=Path("/content") if Path("/content").is_dir() else Path(tempfile.gettempdir())
     workspace=base/f"tropeiro_ui_{case_id}"
     workspace.mkdir(parents=True,exist_ok=True)
+    http.set_cache(base/".tropeiro_cache" if base==Path("/content") else Path.home()/".tropeiro"/"cache",ttl=3600)
     settings=Settings(case_id=case_id,analyst=analyst or "Analista",brand=brand or "",workspace=workspace,mode=mode,provider_budget=budget)
 
     obs: List[Observation]=[]
@@ -134,49 +138,75 @@ def run_quick_case(
         for value in values:
             _observe(obs,value,typ,"manual/input",value,notes="Frontend guided input")
 
-    domains=sorted(set(root_domain(x) for x in iocs.get("domain",[]) if root_domain(x)))
+    domains=sorted(set(root_domain(x) for x in iocs.get("domain",[]) if root_domain(x) and not is_known_legit(x)))   # wa.me, google.com... são contexto, não alvo de coleta
     step(.12,"DNS, RDAP e certificados")
 
+    secrets={k:_secret(k) for k in ("VT_API_KEY","THREATFOX_AUTH_KEY","DNSDUMPSTER_API_KEY","FOFA_API_KEY","CENSYS_PAT")}
+    feats=recommended_features("MULTI_IOC" if kind in ("LURE_TEXT","MULTI_IOC") else kind,mode,budget,secrets,has_brand=bool(brand))
+    limits=budget_limits(budget,len(domains))
+    rdap_rows=[]
     for idx,domain in enumerate(domains):
         data={"domain":domain,"dns":{},"rdap":{},"cert_names":[]}
         ownership[domain]=data
-        for rtype in ("A","AAAA","CNAME","MX","NS"):
-            values=_safe(f"dns:{rtype}",dns.query,status,domain,rtype) or []
-            data["dns"][rtype]=values
-            for value in values:
-                _observe(obs,domain,"domain",f"dns:{rtype}",value)
-        r=_safe("rdap",rdap.lookup,status,domain) or {}
-        data["rdap"]=r
-        for org in r.get("registrant_orgs",[]) or []:
-            _observe(obs,domain,"domain","rdap:registrant_org",org)
-        for org in r.get("registrar_orgs",[]) or []:
-            _observe(obs,domain,"domain","rdap:registrar_org",org)
-        for key in ("created","updated","expires"):
-            if r.get(key):
-                _observe(obs,domain,"domain",f"rdap:{key}",r[key])
-        ct=_safe("crt.sh",crtsh.lookup,status,domain) or []
-        names=set()
-        for row in ct if isinstance(ct,list) else []:
-            for name in str(row.get("name_value","")).splitlines():
-                name=name.strip().lower().lstrip("*.")
-                if name:
-                    names.add(name)
-        data["cert_names"]=sorted(names)[:500]
-        for name in data["cert_names"]:
-            _observe(obs,domain,"domain","crt.sh",name)
+        if feats["ENABLE_DNS"]:
+            for rtype in ("A","AAAA","CNAME","MX","NS"):
+                values=_safe(f"dns:{rtype}",dns.query,status,domain,rtype) or []
+                data["dns"][rtype]=values
+                for value in values:
+                    _observe(obs,domain,"domain",f"dns:{rtype}",value)
+        if feats["ENABLE_RDAP"]:
+            r=_safe("rdap",rdap.lookup,status,domain) or {}
+            data["rdap"]=r
+            for org in r.get("registrant_orgs",[]) or []:
+                _observe(obs,domain,"domain","rdap:registrant_org",org)
+            for org in r.get("registrar_orgs",[]) or []:
+                _observe(obs,domain,"domain","rdap:registrar_org",org)
+            for key in ("created","updated","expires"):
+                if r.get(key):
+                    _observe(obs,domain,"domain",f"rdap:{key}",r[key])
+            if r.get("created"):
+                rdap_rows.append({"domain":domain,"created":r["created"],"registrar":"; ".join(r.get("registrar_orgs") or []),"nameservers":r.get("nameservers") or []})
+        if feats["ENABLE_CT"]:
+            ct=_safe("crt.sh",crtsh.lookup,status,domain) or []
+            names=set()
+            for row in ct if isinstance(ct,list) else []:
+                for name in str(row.get("name_value","")).splitlines():
+                    name=name.strip().lower().lstrip("*.")
+                    if name:
+                        names.add(name)
+            data["cert_names"]=sorted(names)[:500]
+            for name in data["cert_names"]:
+                _observe(obs,domain,"domain","crt.sh",name)
 
         step(.25 + (.20*((idx+1)/max(1,len(domains)))),"Enriquecendo fontes públicas")
-        u=_safe("urlscan",urlscan.search,status,domain,_secret("URLSCAN_API_KEY")) or {}
-        for row in (u.get("results",[]) if isinstance(u,dict) else [])[:100]:
-            page=row.get("page",{});task=row.get("task",{})
-            value=page.get("url") or task.get("url")
-            if value:
-                _observe(obs,domain,"domain","urlscan",value)
-        o=_safe("otx",threatintel.otx_domain,status,domain) or {}
-        for row in (o.get("url_list",[]) if isinstance(o,dict) else [])[:200]:
-            value=row.get("url") if isinstance(row,dict) else None
-            if value:
-                _observe(obs,domain,"domain","otx",value)
+        if feats["ENABLE_URLSCAN"]:
+            u=_safe("urlscan",urlscan.search,status,domain,_secret("URLSCAN_API_KEY")) or {}
+            results=(u.get("results",[]) if isinstance(u,dict) else [])
+            for row in results[:100]:
+                page=row.get("page",{});task=row.get("task",{})
+                value=page.get("url") or task.get("url")
+                if value:
+                    _observe(obs,domain,"domain","urlscan",value)
+            if feats["ENABLE_URLSCAN_DETAILS"]:
+                for row in [x for x in results if x.get("_id")][:limits["URLSCAN_DETAIL_MAX"]]:
+                    scan=_safe("urlscan:result",urlscan.result,status,row["_id"],_secret("URLSCAN_API_KEY")) or {}
+                    obs.extend(enrich.durable_obs(domain,scan))
+        if feats["ENABLE_OTX"]:
+            o=_safe("otx",threatintel.otx_domain,status,domain) or {}
+            for row in (o.get("url_list",[]) if isinstance(o,dict) else [])[:200]:
+                value=row.get("url") if isinstance(row,dict) else None
+                if value:
+                    _observe(obs,domain,"domain","otx",value)
+        if feats["ENABLE_WAYBACK"]:
+            obs.extend(enrich.wayback_obs(domain,_safe("wayback",history.wayback,status,domain,2000) or []))
+        if feats["ENABLE_COMMONCRAWL"]:
+            obs.extend(enrich.commoncrawl_obs(domain,_safe("commoncrawl",history.commoncrawl,status,domain,500) or []))
+        if feats["ENABLE_VT"]:
+            obs.extend(enrich.virustotal_obs(domain,_safe("virustotal",threatintel.virustotal_domain,status,domain,secrets["VT_API_KEY"]) or {}))
+        if feats["ENABLE_THREATFOX"]:
+            obs.extend(enrich.threatfox_obs(domain,_safe("threatfox",threatintel.threatfox_search,status,domain,secrets["THREATFOX_AUTH_KEY"]) or {}))
+
+    batches=registration_batches(rdap_rows)
 
     step(.52,"Montando evidências")
     ledger=build_ledger(obs,settings.source_reliability)
@@ -236,14 +266,14 @@ def run_quick_case(
                 qwen=QwenLocalChat()
                 ai_summary=run_qwen_analysis(qwen,packet,language="pt-BR",max_new_tokens=900)
                 report_data=attach_ai_overlay(report_data,ai_entities,ai_summary,{"frontend_ai":ai_status},packet)
-                ai_status+=" · Qwen concluído"
+                ai_status+=f" · Qwen ({qwen.model_name}) concluído"+(" — modelo pequeno: revise sempre a análise" if "0.6B" in qwen.model_name else "")
             else:
                 report_data=attach_ai_overlay(report_data,ai_entities,{},{"frontend_ai":ai_status})
         except Exception as exc:
             ai_status="IA indisponível: "+str(exc)[:300]
 
     step(.76,"Comparando com casos anteriores")
-    memory_matches=[];artifact_prevalence=[];memory_stats={}
+    memory_matches=[];artifact_prevalence=[];memory_stats={};similar_lures=[]
     resolved_memory_path=(memory_path or "").strip() or str(default_memory_path())
     if memory_enabled:
         try:
@@ -256,7 +286,9 @@ def run_quick_case(
                 "artifact_prevalence":artifact_prevalence,
                 "memory_stats":memory_stats,"same_operator_inferred":False
             }
-            memory.store_case(report_data)
+            if lure_text:
+                similar_lures=lure_similarity(lure_text,memory.lure_texts(exclude_case_id=case_id))
+            memory.store_case({**report_data,"lure_text":lure_text} if lure_text else report_data)   # o texto fica só no banco local, nunca no case.json exportado
             memory_stats=memory.stats()
             report_data["cross_case_intelligence"]["memory_stats"]=memory_stats
         except Exception as exc:
@@ -311,6 +343,7 @@ def run_quick_case(
         "hybrid_entities":hybrid_entities,"ai_edges":ai_edges,"lures":lures,
         "timeline_md":timeline_markdown(build_timeline(ledger)),
         "related_cases":memory_matches,"artifact_prevalence":artifact_prevalence,"exports":cti_files,
+        "batches":batches,"similar_lures":similar_lures,
         "ai_analysis":ai_summary,
         "report_path":str(report_path),
         "package_path":str(zip_path),
@@ -322,6 +355,10 @@ def _df(rows):
     if isinstance(rows,pd.DataFrame):
         return rows
     return pd.DataFrame(rows)
+
+def batch_rows(batches):
+    return [{"domínios":", ".join(b["domains"]),"primeiro":b["first"],"último":b["last"],"registrar":b["registrar"],
+             "nameservers":", ".join(b["nameservers"]),"motivo":b["reason"]} for b in batches or []]
 
 def render_outputs(result):
     """Converte o resultado do caso nas saídas da interface (puro: testável sem Gradio)."""
@@ -340,6 +377,8 @@ def render_outputs(result):
         _df(result["sources"]),
         _df(result.get("related_cases",[])),
         _df(result.get("artifact_prevalence",[])),
+        _df(batch_rows(result.get("batches",[]))),
+        _df(result.get("similar_lures",[])),
         result.get("exports") or [],
         result.get("report_path"),
         result.get("package_path"),
@@ -406,6 +445,10 @@ def build_app():
                         source_table=gr.Dataframe(interactive=False,wrap=True,label="Saúde das fontes")
                     with gr.Tab("Linha do tempo"):
                         timeline=gr.Markdown()
+                    with gr.Tab("Campanha"):
+                        gr.Markdown("**Lotes de registro:** domínios criados em sequência, no mesmo registrar e nameservers (indício de operação comum, não prova).")
+                        batches_table=gr.Dataframe(interactive=False,wrap=True,label="Lotes de registro")
+                        lures_table=gr.Dataframe(interactive=False,wrap=True,label="Iscas parecidas em casos anteriores (Campaign Memory)")
                     with gr.Tab("Memória"):
                         related_table=gr.Dataframe(interactive=False,wrap=True,label="Casos relacionados")
                         prevalence_table=gr.Dataframe(interactive=False,wrap=True,label="Prevalência / raridade")
@@ -415,7 +458,7 @@ def build_app():
                         with gr.Accordion("Relatório HTML e pacote completo (ZIP)",open=False):
                             report_file=gr.File(label="Relatório HTML")
                             package_file=gr.File(label="Pacote completo ZIP")
-        outs=[summary,graph,ioc_table,lure_view,edges_table,ai_table,ai_json,rel_table,ev_table,timeline,source_table,related_table,prevalence_table,cti_files,report_file,package_file]
+        outs=[summary,graph,ioc_table,lure_view,edges_table,ai_table,ai_json,rel_table,ev_table,timeline,source_table,related_table,prevalence_table,batches_table,lures_table,cti_files,report_file,package_file]
         run.click(execute,inputs=[target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,memory_enabled,memory_path],outputs=outs)
         demo.click(load_demo,outputs=[target,target_type,*outs])
     app.launch_style={} if legacy else style

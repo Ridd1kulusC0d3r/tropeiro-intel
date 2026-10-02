@@ -9,7 +9,7 @@ def test_demo_is_offline_and_complete():
 
 def test_render_outputs_shape_and_escaping():
     out=render_outputs(demo_result())
-    assert len(out)==16 and '<svg' in out[1] and 'Receita Federal' in out[3]
+    assert len(out)==18 and '<svg' in out[1] and 'Receita Federal' in out[3]
     assert 'Linha' not in out[9] and out[9].startswith('| Primeira')
 
 def test_views_escape_html():
@@ -46,7 +46,7 @@ def test_run_quick_case_lure_with_sources_down(monkeypatch,tmp_path):
     assert any(e['type']=='cpf' or e['type']=='whatsapp' for e in res['hybrid_entities'])
     assert res['summary']['sources_failed']>0 and res['summary']['ai'].endswith('extração: regras')
     assert {p.rsplit('/',1)[-1] for p in res['exports']}>={'stix.json','misp.json'}
-    assert len(render_outputs(res))==16
+    assert len(render_outputs(res))==18
 
 def test_workbench_records_rdap_dates_in_ledger(monkeypatch,tmp_path):
     from tropeiro.frontend import app as fe
@@ -59,3 +59,8 @@ def test_workbench_records_rdap_dates_in_ledger(monkeypatch,tmp_path):
     res=fe.run_quick_case('novo-dominio.example','DOMAIN',case_id='RDAP-1',memory_enabled=False)
     srcs={(e['source'],e['value']) for e in res['evidence']}
     assert ('rdap:created','2026-09-20T10:00:00Z') in srcs and ('rdap:expires','2027-09-20T10:00:00Z') in srcs
+
+
+def test_demo_has_campaign_signals():
+    r=demo_result()
+    assert len(r['batches'])==1 and len(r['batches'][0]['domains'])==2 and r['similar_lures'][0]['similarity']>0.8

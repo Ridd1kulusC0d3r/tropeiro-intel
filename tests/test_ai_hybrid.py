@@ -53,3 +53,43 @@ def test_qwen_retry_and_downgrade():
     f=out['key_findings']
     assert f[0]['analytic_type']=='hypothesis' and f[0]['confidence']=='INSUFFICIENT' and f[0]['evidence_refs']==[]
     assert f[1]['analytic_type']=='observed' and out['_validation']['downgraded_findings']==1
+
+def test_valid_ref_but_unrelated_claim_is_downgraded():
+    """Caso real (Qwen3-0.6B): citou um ev_id existente para uma afirmação sem relação com ele."""
+    from tropeiro.ai import enforce_evidence_support
+    packet={'evidence_ledger':[{'evidence_id':'ev-1','entity':'receita-regulariza.example','entity_type':'domain','source':'manual/input','value':'receita-regulariza.example'}]}
+    a={'key_findings':[
+        {'statement':'seu CPF está irregular.','analytic_type':'observed','confidence':'HIGH','evidence_refs':['ev-1'],'basis':'Observado na página de entrada do site.'},
+        {'statement':'O domínio receita-regulariza.example foi informado como alvo.','analytic_type':'observed','confidence':'HIGH','evidence_refs':['ev-1'],'basis':'entrada manual'}],
+       'hypotheses':[{'hypothesis':'h','support_refs':['ev-1'],'contradiction_refs':['ev-1']}]}
+    out=enforce_evidence_support(a,packet)
+    bad,good=out['key_findings']
+    assert bad['analytic_type']=='hypothesis' and bad['confidence']=='LOW' and bad['_flag']=='evidence_mismatch'
+    assert good['analytic_type']=='observed' and good['confidence']=='HIGH' and '_flag' not in good
+    assert out['hypotheses'][0]['contradiction_refs']==[] and out['hypotheses'][0]['_flags'][0]=='refs_overlap' and 'evidence_mismatch' in out['hypotheses'][0]['_flags']
+    assert out['_validation']['mismatched_findings']==2 and out['_validation']['downgraded_findings']==1
+
+def test_hypothesis_without_support_and_unreferenced_detection_are_flagged():
+    from tropeiro.ai import enforce_evidence_support, analysis_request
+    a={'hypotheses':[{'hypothesis':'h','support_refs':[],'contradiction_refs':[],'confidence':'HIGH'}],
+       'detection_opportunities':[{'surface':'dns','idea':'x','evidence_refs':[]}]}
+    out=enforce_evidence_support(a,{})
+    assert out['hypotheses'][0]['confidence']=='INSUFFICIENT' and out['hypotheses'][0]['_flag']=='no_support'
+    assert out['detection_opportunities'][0]['_flag']=='no_evidence' and out['_validation']['downgraded_findings']==1
+    req=analysis_request({'evidence_ledger':[{'evidence_id':'ev-abc'}],'packet_sha256':'h'})
+    assert 'IDS_DE_EVIDENCIA_VALIDOS' in req and '"ev-abc"' in req          # o modelo recebe a lista de ids reais
+
+def test_qwen_chat_is_deterministic_by_default():
+    from tropeiro.ai import QwenLocalChat
+    assert QwenLocalChat('x').deterministic is True and QwenLocalChat('x',deterministic=False).deterministic is False
+
+
+def test_hypothesis_with_unrelated_support_is_capped():
+    from tropeiro.ai import enforce_evidence_support
+    packet={'evidence_ledger':[{'evidence_id':'ev-1','entity':'receita-regulariza.example','source':'dns:A','value':'203.0.113.17'}]}
+    out=enforce_evidence_support({'hypotheses':[
+        {'hypothesis':'O CPF do usuário está irregular','support_refs':['ev-1'],'contradiction_refs':[],'confidence':'HIGH'},
+        {'hypothesis':'receita-regulariza.example resolve para 203.0.113.17','support_refs':['ev-1'],'contradiction_refs':[],'confidence':'HIGH'}]},packet)
+    bad,good=out['hypotheses']
+    assert bad['confidence']=='LOW' and bad['_flag']=='evidence_mismatch'
+    assert good['confidence']=='HIGH' and '_flag' not in good

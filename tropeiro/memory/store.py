@@ -277,6 +277,20 @@ class CaseMemory:
             )
         return {"case_id": case_id, "artifacts": len(artifacts), "report_sha256": report_sha, "memory_path": str(self.path)}
 
+    def lure_texts(self, exclude_case_id: Optional[str] = None, limit: int = 500) -> Dict[str, str]:
+        """Textos de isca guardados (`report_data['lure_text']`) dos casos mais recentes, para comparar iscas entre casos."""
+        out: Dict[str, str] = {}
+        with self.connect() as con:
+            rows = con.execute("SELECT case_id,report_json FROM cases WHERE case_id<>? ORDER BY updated_at DESC LIMIT ?", (exclude_case_id or "", int(limit))).fetchall()
+        for row in rows:
+            try:
+                text = json.loads(row["report_json"]).get("lure_text")
+            except (ValueError, AttributeError):
+                continue
+            if text:
+                out[row["case_id"]] = str(text)
+        return out
+
     def list_cases(self, limit: int = 100) -> List[Dict[str, Any]]:
         with self.connect() as con:
             rows = con.execute(

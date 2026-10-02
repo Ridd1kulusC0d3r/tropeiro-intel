@@ -10,6 +10,7 @@ from ..intelligence.br_lures import detect_br_lures
 from ..intelligence.decision_objects import build_ioc_decisions
 from ..intelligence.warninglists import WarningListEngine
 from ..timeline import build_timeline, timeline_markdown
+from ..correlation.registration import registration_batches
 from ..reporting.stix import bundle_from_iocs
 from ..reporting.misp import misp_event
 from ..intelligence.sigma import sigma_rules
@@ -20,10 +21,10 @@ DEMO_LURE=("Receita Federal: seu CPF está irregular. Regularize hoje em hxxps:/
 
 DEMO_OWNERSHIP={
  'receita-regulariza.example':{'dns':{'A':['203.0.113.17'],'NS':['ns1.hostbarato.example']},
-    'rdap':{'registrar_orgs':['Registrar Exemplo Ltda'],'registrant_orgs':[]},
+    'rdap':{'registrar_orgs':['Registrar Exemplo Ltda'],'registrant_orgs':[],'created':'2026-09-20T10:00:05Z','nameservers':['ns1.hostbarato.example']},
     'cert_names':['receita-regulariza.example','pagamento.receita-regulariza.example','www.receita-regulariza.example']},
  'regulariza-cpf.example':{'dns':{'A':['203.0.113.17'],'NS':['ns1.hostbarato.example']},
-    'rdap':{'registrar_orgs':['Registrar Exemplo Ltda'],'registrant_orgs':[]},'cert_names':['regulariza-cpf.example']},
+    'rdap':{'registrar_orgs':['Registrar Exemplo Ltda'],'registrant_orgs':[],'created':'2026-09-20T10:00:41Z','nameservers':['ns1.hostbarato.example']},'cert_names':['regulariza-cpf.example']},
 }
 
 def demo_result() -> dict:
@@ -57,4 +58,6 @@ def demo_result() -> dict:
             'hybrid_entities':ents,'ai_edges':edges,'lures':detect_br_lures(DEMO_LURE),
             'timeline_md':timeline_markdown(build_timeline(ledger)),
             'related_cases':[{'case_id':'CASE-2026-07','similarity':.82,'shared':'IP 203.0.113.17, NS ns1.hostbarato.example'}],
+            'batches':registration_batches([{'domain':d,'created':v['rdap']['created'],'registrar':'; '.join(v['rdap']['registrar_orgs']),'nameservers':v['rdap']['nameservers']} for d,v in DEMO_OWNERSHIP.items()]),
+            'similar_lures':[{'case_id':'CASE-2026-07','similarity':0.88,'derived':True}],
             'exports':[str(p) for p in sorted(out.iterdir())],'report_path':None,'package_path':None}

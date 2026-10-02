@@ -246,3 +246,21 @@ a, b = saida["key_findings"]
 assert a["analytic_type"] == "hypothesis" and a["confidence"] == "INSUFFICIENT"      # EV-404 não existe: rebaixado
 assert b["analytic_type"] == "observed"                                              # EV-1 existe: mantido
 ```
+
+Referência válida não basta: se a afirmação não fala da evidência citada, o achado também é rebaixado (caso real de um modelo pequeno):
+
+```python
+from tropeiro.ai import enforce_evidence_support
+
+pacote = {"evidence_ledger": [{"evidence_id": "ev-1", "entity": "receita-regulariza.example", "entity_type": "domain",
+                               "source": "manual/input", "value": "receita-regulariza.example"}]}
+analise = {"key_findings": [
+    {"statement": "seu CPF está irregular.", "analytic_type": "observed", "confidence": "HIGH",
+     "evidence_refs": ["ev-1"], "basis": "Observado na página de entrada do site."},
+    {"statement": "O domínio receita-regulariza.example foi informado como alvo.", "analytic_type": "observed",
+     "confidence": "HIGH", "evidence_refs": ["ev-1"], "basis": "entrada manual"}]}
+saida = enforce_evidence_support(analise, pacote)
+sem_relacao, coerente = saida["key_findings"]
+assert sem_relacao["_flag"] == "evidence_mismatch" and sem_relacao["analytic_type"] == "hypothesis"
+assert coerente["analytic_type"] == "observed" and "_flag" not in coerente
+```

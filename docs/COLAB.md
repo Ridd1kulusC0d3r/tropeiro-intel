@@ -50,6 +50,12 @@ Every executable cell is preceded by a help card explaining:
 
 The larger notebook is intentional: the investigation should be inspectable rather than hidden behind one opaque button.
 
+## Novidades na 4.7
+
+- **Etapa 08** agora aceita texto com defang (`hxxps://x[.]com`).
+- **Etapa 08B · Iscas brasileiras:** marca/tema (Receita, Correios, PIX...), CPF/CNPJ válidos, PIX, WhatsApp, e separação das **plataformas legítimas** (contexto, não bloqueio). Variáveis: `BR_LURES`, `HYBRID_ENTITIES`, `IOCS_ACTIONABLE`, `IOCS_CONTEXT`.
+- **Etapa 55B · Exportações CTI:** STIX 2.1 (Indicators + Campaign), MISP e Sigma em `export/`, com escolha de TLP.
+
 ## Modes
 
 - `PASSIVE` — recommended default.

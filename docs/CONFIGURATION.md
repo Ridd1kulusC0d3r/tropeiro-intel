@@ -24,19 +24,26 @@ Com **mais de 10 alvos** os limites caem proporcionalmente (mínimos: 25 lookali
 
 ## O que liga em cada superfície
 
-| Recurso | Notebook Colab (plano automático) | Workbench rápido | CLI `lure` |
+| Recurso | Notebook Colab | Workbench | CLI `lure` |
 |---|---|---|---|
 | DNS, RDAP, crt.sh | sim (domínio/URL/lote) | sim | não (offline) |
-| Wayback | sim | não | não |
-| Common Crawl | só em `SAFE_ENRICHMENT` | não | não |
-| urlscan, OTX | sim | sim | não |
-| VirusTotal, ThreatFox | com chave | não | não |
+| Wayback (histórico) | sim | sim | não |
+| Common Crawl | só em `SAFE_ENRICHMENT` | só em `SAFE_ENRICHMENT` | não |
+| urlscan (busca) e OTX | sim | sim | não |
+| urlscan: detalhes e **identificadores duráveis** (GA, GTM, AdSense, pixel) | sim | sim, até `URLSCAN_DETAIL_MAX` scans | não |
+| VirusTotal, ThreatFox | com chave | com chave | não |
 | dnstwist e similaridade de domínios | sim | não | não |
 | DNSDumpster, FOFA, Censys | com chave (FOFA/Censys fora de `free`) | não | não |
-| Extração de entidades da isca | GLiNER opcional (sem as regras BR) | **regras BR + GLiNER opcional** | **regras BR** (sem modelo) |
-| Exportações | STIX e MISP do exportador do notebook (observáveis) | **STIX 2.1 com Indicators, MISP e Sigma** | **STIX 2.1 com Indicators, MISP e Sigma** |
+| **Lotes de registro** (criados em sequência, mesmo registrar/NS) | não | sim, com 2+ domínios | não |
+| **Iscas parecidas** em casos anteriores | não | sim, com Campaign Memory | não |
+| Extração de entidades da isca | GLiNER opcional (AI-01) + célula **08B** (regras BR) | **regras BR + GLiNER opcional** | **regras BR** (sem modelo) |
+| Exportações | Export Center (ZIP seletivo) + célula **55B** (STIX 2.1, MISP, Sigma) | **STIX 2.1, MISP e Sigma** no ZIP | **STIX 2.1, MISP e Sigma** |
 
-Ou seja: **modo e profundidade só têm efeito no notebook**. O Workbench roda sempre o núcleo acima, para ser rápido; para a investigação completa use o notebook. Alinhar as superfícies (Workbench respeitando modo/profundidade e o notebook usando a extração híbrida e os exports novos) está na [Fase 0 do roadmap](ROADMAP.md).
+**Modo e profundidade valem no notebook e no Workbench** (ambos usam `recommended_features` e `budget_limits`). Falta ao Workbench rodar dnstwist, DNSDumpster, FOFA e Censys: para a investigação mais ampla use o notebook.
+
+No Workbench, `free` / `balanced` / `extended` mudam quantos scans do urlscan têm o detalhe baixado (5 / 12 / 30). Sem chaves, VirusTotal e ThreatFox aparecem como `SKIPPED_MISSING_SECRET` na saúde das fontes.
+
+> **Privacidade da memória.** Com a Campaign Memory ligada, o Workbench guarda o **texto da isca** no banco local (`lure_texts`) para comparar iscas entre casos. Esse texto **não** vai para `case.json`, relatório nem ZIP exportados. Se a mensagem tiver dados de vítimas, desmarque "Usar Campaign Memory" ou apague o arquivo `.sqlite`.
 
 ## Chaves de API (todas opcionais)
 

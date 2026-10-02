@@ -16,7 +16,8 @@ STEPS=[  # (arquivo, aba a abrir, legenda)
     ('03-entities','Isca e IA','Regras BR + GLiNER: entidades derivadas, com método e confiança'),
     ('04-iocs','IOCs','Cada IOC com decisão: BLOCK, HUNT, MONITOR ou TAKEDOWN PREP'),
     ('05-timeline','Linha do tempo','Primeira e última observação por entidade, com fontes'),
-    ('06-export','Exportar','STIX 2.1, MISP e Sigma prontos para o TIP/SIEM'),
+    ('06-campaign','Campanha','Lotes de registro e iscas parecidas: a operação é maior que um domínio?'),
+    ('07-export','Exportar','STIX 2.1, MISP e Sigma prontos para o TIP/SIEM'),
 ]
 
 def font(size,bold=False):

@@ -1,5 +1,14 @@
 # Changelog
 
+## 4.7.0 Phase 0: Workbench, notebook and models aligned
+- Workbench now honours **mode and depth** (`recommended_features` / `budget_limits`): Wayback, Common Crawl (SAFE_ENRICHMENT), VirusTotal and ThreatFox (with keys), urlscan details with **durable identifiers** (GA/GTM/AdSense/pixel) capped by depth.
+- New **Campanha** tab: registration batches (same registrar/NS, created in sequence) and similar lures from the Campaign Memory (`CaseMemory.lure_texts`; the text stays in the local DB, never in the exported case.json).
+- HTTP cache enabled in the Workbench; hostname validation also in OTX, VirusTotal, Wayback and Common Crawl collectors.
+- Notebook: refang on ingestion, new cell 08B (BR lures, legitimate platforms) and 55B (STIX 2.1 / MISP / Sigma export).
+- Models validated for real on CPU (GLiNER + Qwen3-0.6B). Fix: the `ai` extra was incomplete (`sentencepiece`, `protobuf` added).
+- CI: new `workbench` job runs the front-end tests on Gradio 5 and 6; tests block real network access (`tests/conftest.py`).
+- Removed dead code `storage/case_store.py`.
+
 ## 4.6.1 Documentation overhaul and fixes
 - Docs: new index, installation, configuration, Workbench user guide (with screenshots), CLI, outputs/formats, results interpretation, cookbook (7 recipes), Python API, FAQ; refreshed quickstart, glossary, common errors, search types, contributing. Python examples in `docs/` are executed in CI; relative links are checked.
 - Fix: the CLI did not refang input, so defanged lure domains were lost. `extract_lure_infra` now refangs.

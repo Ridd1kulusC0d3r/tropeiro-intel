@@ -10,19 +10,20 @@ Existe como módulo, **mas ainda não está ligado ao Workbench/pipeline**: `sim
 
 Nunca executado com modelos reais fora dos testes: GLiNER e Qwen (rodar no Colab e registrar o resultado).
 
-## Fase 0 · Fechar o que já existe (1 semana)
+## Fase 0 · Fechar o que já existe (concluída na 4.7)
 
-| Item | Critério de pronto |
+| Item | Estado |
 |---|---|
-| Rodar GLiNER + Qwen reais no Colab | caso real anonimizado salvo em `examples/`; achados do Qwen sem referência inválida |
-| Ligar `registration_batches` e `cluster_kits` ao pipeline | aba "Campanha" mostra lotes de registro e kits repetidos, com o motivo |
-| Ligar `lure_similarity` à Campaign Memory | isca nova aponta casos antigos com texto parecido, sem IOC em comum |
-| Ativar cache HTTP no Workbench | segunda execução do mesmo alvo não repete chamadas |
-| Notebook usar extração híbrida (`extract_hybrid`) e exports STIX/MISP/Sigma novos | mesma saída do Workbench e da CLI |
-| Workbench respeitar modo e profundidade | hoje roda sempre o mesmo núcleo (DNS, RDAP, crt.sh, urlscan, OTX); passar a usar `recommended_features` |
-| CI com Gradio 5 **e** 6 | matriz no workflow (o dependabot já liberou `<7`) |
-| Unificar `storage/case_store.py` com `memory/store.py` | um só armazenamento; migração do que existir |
-| Release `v4.6.0`, topics, social preview | feitos no GitHub |
+| Rodar GLiNER + Qwen reais | **feito em CPU** com a isca de exemplo; resultado em [AI](AI.md#validação-com-modelos-reais). Falta rodar em GPU e em casos reais anonimizados |
+| `registration_batches` no Workbench | **feito** (aba Campanha) |
+| `lure_similarity` com a Campaign Memory | **feito** (aba Campanha) |
+| Cache HTTP no Workbench | **feito** (1 h, em `~/.tropeiro/cache`) |
+| Workbench respeita modo e profundidade | **feito** (Wayback, Common Crawl, VirusTotal, ThreatFox, detalhes do urlscan) |
+| Notebook com regras BR e exports novos | **feito** (células 08B e 55B) |
+| CI com Gradio 5 e 6 | **feito** (job `workbench`) |
+| Unificar os stores | **feito**: `storage/case_store.py` era código morto e foi removido |
+| `cluster_kits` no pipeline | **pendente**: exige baixar os arquivos do site (favicon, JS), próxima fase |
+| Release, topics, social preview | manual no GitHub |
 
 ## Fase 1 · Confiança nos números (1 mês)
 
@@ -59,7 +60,7 @@ Ideias pequenas, em Python simples, que ninguém entrega junto:
 |---|---|---|
 | Casos reais anonimizados rotulados | 0 | 30 |
 | Brier score publicado | — | < 0,20 |
-| Módulos ligados ao Workbench | parcial | todos |
+| Módulos ligados ao Workbench | quase todos (falta fingerprint de kit e calibração) | todos |
 | Cobertura de coletores com teste gravado | 0 | 100% |
 | Instalação | clone + pip -e | `pip install tropeiro-intel` |
 

@@ -67,7 +67,7 @@ Detalhes: [ARCHITECTURE](docs/ARCHITECTURE.md) · [Camada de IA](docs/AI.md) · 
 
 <table>
 <tr><td><img src="docs/assets/02-graph.png" alt="Grafo"></td><td><img src="docs/assets/03-entities.png" alt="Isca e IA"></td></tr>
-<tr><td><img src="docs/assets/04-iocs.png" alt="IOCs"></td><td><img src="docs/assets/06-export.png" alt="Exportação"></td></tr>
+<tr><td><img src="docs/assets/04-iocs.png" alt="IOCs"></td><td><img src="docs/assets/07-export.png" alt="Exportação"></td></tr>
 </table>
 
 ---

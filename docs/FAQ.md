@@ -20,7 +20,7 @@ Workbench: interface local, rápida, com grafo e exportações. Notebook: invest
 ## Privacidade e segurança
 
 **O texto da isca sai do meu computador?**
-Não. A extração (regras e modelos) é local. As consultas de coleta usam apenas **domínios/hostnames** extraídos. `--share` do Workbench cria um link público temporário: evite com casos reais.
+Não. A extração (regras e modelos) é local. Com a Campaign Memory ligada, o texto fica guardado no banco local para comparar iscas (nunca no `case.json` exportado); desmarque a memória para não guardar. As consultas de coleta usam apenas **domínios/hostnames** extraídos. `--share` do Workbench cria um link público temporário: evite com casos reais.
 
 **Posso colar uma mensagem com dados pessoais da vítima?**
 Evite. Remova nomes, CPFs e telefones das vítimas antes de colar quando possível, e não os inclua em pacotes compartilhados. CPFs que aparecem na isca são extraídos para análise local, não são consultados em lugar nenhum.
@@ -60,14 +60,14 @@ Casos: `<base>/tropeiro_ui_<ID>/`. Memória: `~/.tropeiro/tropeiro_case_memory.s
 [CONFIGURATION](CONFIGURATION.md#regras-de-iscas-brasileiras): `load_rules("arquivo.json")`.
 
 **O Workbench respeita modo e profundidade?**
-Ainda não: ele roda sempre o mesmo núcleo. Isso está no [roadmap](ROADMAP.md). O notebook respeita.
+Sim, desde a 4.7. Veja a tabela em [CONFIGURATION](CONFIGURATION.md#o-que-liga-em-cada-superfície).
 
 **Como contribuo?**
 [CONTRIBUTING](../CONTRIBUTING.md).
 
 ## Limites conhecidos
 
-- GLiNER e Qwen reais ainda não foram validados em casos reais deste repositório.
+- GLiNER e Qwen foram executados de verdade em CPU (veja [AI](AI.md#validação-com-modelos-reais)), mas só sobre iscas de exemplo, não sobre casos reais.
 - Importação em MISP/OpenCTI segue os formatos padrão, mas não foi testada contra instâncias reais.
 - Cobertura de iscas: lista curta de marcas brasileiras; contribuições são bem-vindas.
-- Lotes de registro, fingerprint de kit e calibração existem como bibliotecas, ainda não como telas do Workbench.
+- Fingerprint de kit e calibração existem como bibliotecas, ainda não como telas do Workbench (lotes de registro e iscas parecidas já têm a aba **Campanha**).
