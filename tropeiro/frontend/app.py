@@ -349,14 +349,17 @@ def build_app():
     def load_demo():
         return (DEMO_LURE,"LURE_TEXT",*render_outputs(demo_result()))
 
-    theme=gr.themes.Base(primary_hue="amber",neutral_hue="slate",font=("ui-sans-serif","system-ui","sans-serif"),
-                         font_mono=("ui-monospace","Menlo","monospace")).set(
+    theme=gr.themes.Base(primary_hue="amber",neutral_hue="slate",font=[gr.themes.Font(f) for f in ("ui-sans-serif","system-ui","sans-serif")],
+                         font_mono=[gr.themes.Font(f) for f in ("ui-monospace","Menlo","monospace")]).set(
         body_background_fill="#0B0D10",body_background_fill_dark="#0B0D10",block_background_fill="#12151A",block_background_fill_dark="#12151A",
         block_border_color="#252A32",block_border_color_dark="#252A32",input_background_fill="#0F1217",input_background_fill_dark="#0F1217",
         button_primary_background_fill="#E8A33D",button_primary_background_fill_dark="#E8A33D",
         button_primary_text_color="#0B0D10",button_primary_text_color_dark="#0B0D10")
 
-    with gr.Blocks(css=APP_CSS,theme=theme,js="() => { document.body.classList.add('dark'); }",title="Tropeiro Intel · Investigation Workbench") as app:
+    # Gradio >=6 moveu css/theme/js do Blocks() para launch(); guardamos o estilo para o launch.
+    style=dict(css=APP_CSS,theme=theme,js="() => { document.body.classList.add('dark'); }")
+    legacy=int(gr.__version__.split(".")[0])<6
+    with gr.Blocks(title="Tropeiro Intel · Investigation Workbench",**(style if legacy else {})) as app:
         gr.HTML(HERO)
         with gr.Row():
             with gr.Column(scale=1,min_width=360,elem_classes=["ti-card"]):
@@ -409,9 +412,10 @@ def build_app():
         outs=[summary,graph,ioc_table,lure_view,edges_table,ai_table,ai_json,rel_table,ev_table,timeline,source_table,related_table,prevalence_table,cti_files,report_file,package_file]
         run.click(execute,inputs=[target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,memory_enabled,memory_path],outputs=outs)
         demo.click(load_demo,outputs=[target,target_type,*outs])
+    app.launch_style={} if legacy else style
     return app
 
 def launch_colab_frontend(server_port: int=7860, inline: bool=True):
     app=build_app()
-    app.launch(server_name="0.0.0.0",server_port=server_port,share=False,inline=inline,prevent_thread_lock=True,show_error=True)
+    app.launch(server_name="0.0.0.0",server_port=server_port,share=False,inline=inline,prevent_thread_lock=True,show_error=True,**app.launch_style)
     return app

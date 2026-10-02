@@ -7,7 +7,8 @@ import sys, threading, time
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT=Path(__file__).resolve().parents[1]; OUT=ROOT/'docs'/'assets'; sys.path.insert(0,str(ROOT))
+import os
+ROOT=Path(__file__).resolve().parents[1]; OUT=Path(os.environ.get('MEDIA_OUT') or ROOT/'docs'/'assets'); OUT.mkdir(parents=True,exist_ok=True); sys.path.insert(0,str(ROOT))
 PORT=7871; W,H=1440,1000
 STEPS=[  # (arquivo, aba a abrir, legenda)
     ('01-home','', 'Cole um alvo ou o texto da isca — tudo passivo por padrão'),
@@ -42,7 +43,7 @@ def main():
     from playwright.sync_api import sync_playwright
     from tropeiro.frontend.app import build_app
     app=build_app()
-    app.queue(); app.launch(server_name='127.0.0.1',server_port=PORT,prevent_thread_lock=True,quiet=True)
+    app.queue(); app.launch(server_name='127.0.0.1',server_port=PORT,prevent_thread_lock=True,quiet=True,**app.launch_style)
     time.sleep(2); shots=[]
     with sync_playwright() as p:
         b=p.chromium.launch(executable_path=_chrome()); pg=b.new_page(viewport={'width':W,'height':H})
