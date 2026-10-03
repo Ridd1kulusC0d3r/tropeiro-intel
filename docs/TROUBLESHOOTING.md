@@ -1,5 +1,27 @@
 # Troubleshooting
 
+## Minha busca não funciona ou parece travada
+
+Faça nesta ordem (leva 1 minuto):
+
+1. **Diagnostique:** `tropeiro doctor` (ou, no Workbench, *Diagnóstico do ambiente → Rodar diagnóstico*). Ele testa Python, dependências, pastas e a rede até cada fonte, e diz o que corrigir.
+2. **Tente sem interface:** `tropeiro search example.com`. Se funcionar, o problema está na interface/navegador; se não, está no ambiente/rede.
+3. **Leia o estado de cada fonte** (*Dados → Saúde das fontes* ou o terminal): `UNAVAILABLE` mostra o motivo, `TIMEOUT` indica prazo estourado, `SKIPPED_*` não é erro.
+
+| Sintoma | Causa provável | O que fazer |
+|---|---|---|
+| `tropeiro search` sai com código **2**: "nenhuma fonte respondeu" | sem internet ou proxy bloqueando | `tropeiro doctor`; configure `HTTPS_PROXY` ou libere os domínios das fontes |
+| Várias fontes `UNAVAILABLE` com `falha de rede` | firewall/proxy corporativo, ou a fonte caiu | veja qual falha no `doctor`; as demais fontes continuam valendo |
+| `Wayback` sempre `UNAVAILABLE` | o Wayback é instável e alguns proxies o bloqueiam | normal; a busca segue sem ele |
+| `crt.sh` `HTTP 502/404` | o crt.sh fica sobrecarregado | já há uma nova tentativa; repita em alguns minutos |
+| `urlscan:detalhes` `HTTP 403` | o urlscan pode exigir chave para os detalhes | defina `URLSCAN_API_KEY` (opcional); a busca do urlscan em si funciona |
+| Resultado diz `TIMEOUT` | alguma fonte passou do prazo (45/90/180 s) | o resultado é parcial e válido; aumente `--budget` ou `--deadline` |
+| A tela do Workbench fica **sem resultado e sem erro** | versões anteriores à 4.8: o Gradio recusava servir os arquivos exportados (`InvalidPathError`) | atualize (`git pull && pip install -e ".[colab]"`) |
+| No **Colab**, a interface não aparece | o Gradio precisa de link público no Colab; versões antigas forçavam `share=False` | atualize; execute a célula 06A de novo |
+| `localhost refused` / porta ocupada | outra instância usando a porta | `tropeiro workbench` agora escolhe a primeira porta livre |
+| Demora mais de 1 minuto em um domínio | fontes lentas em série (versões antigas) | atualize: a coleta agora é paralela, com prazo |
+
+
 ## A provider returns nothing
 
 “No result” can mean:

@@ -72,7 +72,7 @@ Instalou sem o extra do Workbench. Rode `pip install -e ".[colab]"`.
 
 ## Workbench abre sem o tema escuro (texto claro em fundo claro)
 
-Costuma ser Gradio incompatível ou o app aberto por `build_app().launch()` no Gradio 6. Abra com `tropeiro workbench` (ou `launch_local()` / `launch_colab_frontend()`) e use `gradio>=4.44,<7`.
+Costuma ser Gradio incompatível ou o app aberto por `build_app().launch()` no Gradio 6 (o tema é aplicado no `launch()`). Abra com `tropeiro workbench` (ou `launch_local()` / `launch_colab_frontend()`) e use `gradio>=4.44,<7`.
 
 ## `tropeiro: command not found`
 
@@ -97,6 +97,22 @@ Nenhuma regra de marca/tema bateu. Não significa que a mensagem seja legítima.
 ## Caso rápido sem data de registro
 
 Versões anteriores à 4.6.1 não gravavam `rdap:created` no ledger. Atualize.
+
+## Busca de texto de isca não consultou nada (tratada como telefone)
+
+Versões anteriores à 4.8 classificavam um texto com um número de telefone como **Telefone**, e nenhuma fonte rodava. Atualize: agora um texto com palavras é sempre uma **isca**. Veja [SEARCH_TYPES](SEARCH_TYPES.md#como-o-tipo-é-detectado).
+
+## A tela do Workbench ficou sem resultado e sem erro (`InvalidPathError` no terminal)
+
+O Gradio só serve arquivos da pasta atual, da temporária ou de `allowed_paths`. Até a 4.7 os arquivos exportados ficavam em uma pasta fora disso e a tela não exibia nada. Na 4.8 o Workbench publica cópias numa pasta aceita e libera a pasta de trabalho. Atualize.
+
+## `HTTP 403` no urlscan (detalhes)
+
+A API de resultados do urlscan pode exigir chave. A consulta é interrompida após 2 falhas seguidas e o estado fica `UNAVAILABLE` apenas para `urlscan:detalhes`; a busca do urlscan segue `OK`. Defina `URLSCAN_API_KEY` se precisar dos detalhes.
+
+## `TIMEOUT` em alguma fonte
+
+O prazo total (45/90/180 s) acabou antes da fonte responder. O resultado sai parcial. Aumente a profundidade ou use `--deadline`.
 
 ## Memória "some" entre sessões do Colab
 

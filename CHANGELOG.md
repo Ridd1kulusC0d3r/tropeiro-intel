@@ -1,5 +1,18 @@
 # Changelog
 
+## 4.8.0 A search that actually runs
+Reproduced a real search end to end (fresh install, real network, real browser and the full notebook) and fixed what blocked it.
+- **Fix:** the Workbench showed no result and no error when its output files were outside the folders Gradio serves (`InvalidPathError`). Copies are now published to a servable folder and `allowed_paths` is set.
+- **Fix:** the Colab Workbench (cell 06A) forced `share=False`; Gradio needs a public link in Colab and decides it itself when `share=None`.
+- **Fix:** a pasted lure containing a phone number was classified as PHONE and no source ran. A text with words is now always a lure (`tropeiro.targets`).
+- **Fix:** IP, e-mail, hash and phone searches queried nothing. IP now collects PTR, RDAP and urlscan (hosted domains); e-mail collects its domain; hash uses VirusTotal/ThreatFox (keys); phone explains why nothing is queried.
+- **Perf:** sources run **concurrently** under a total deadline (45/90/180 s, `TIMEOUT` rows), per-call timeout cap (20 s), no retry storms (Wayback/Common Crawl: 1 attempt), urlscan detail circuit breaker, per-host intervals. A domain went from ~115 s (serial, 13 failures) to 10-35 s.
+- **New:** `tropeiro search` (full search with live progress, exit code 2 when no source answers), `tropeiro doctor` (+ "Diagnóstico do ambiente" panel), `investigate()` / `plan_investigation()` / `run_tasks()` API, `TROPEIRO_WORKSPACE`, automatic free port for `tropeiro workbench`.
+- **UI:** live per-source progress, visible error panel, states in Portuguese in "Saúde das fontes", short lure title, relation table columns in Portuguese.
+- **Notebook:** guide cards no longer dump the cell code into the text (56 cards), target form fields (`ALVO`/`TIPO`) as a fallback when widgets do not render, 06A explains the public link. Full "Run all" executes with 0 errors in 65 s.
+- **Refactor:** one pipeline (`pipeline.py`) shared by UI, CLI and API; `frontend/app.py` is now a thin layer; `enrich` moved to `enrichment.py`; `run_quick_case` kept as an alias.
+- crt.sh: 2 attempts including transient 404/502/503. Docs rewritten to match (CLI, SEARCH_TYPES, CONFIGURATION, TROUBLESHOOTING, USER_GUIDE, PYTHON_API with runnable examples).
+
 ## 4.7.0 Phase 0: Workbench, notebook and models aligned
 - Workbench now honours **mode and depth** (`recommended_features` / `budget_limits`): Wayback, Common Crawl (SAFE_ENRICHMENT), VirusTotal and ThreatFox (with keys), urlscan details with **durable identifiers** (GA/GTM/AdSense/pixel) capped by depth.
 - New **Campanha** tab: registration batches (same registrar/NS, created in sequence) and similar lures from the Campaign Memory (`CaseMemory.lure_texts`; the text stays in the local DB, never in the exported case.json).

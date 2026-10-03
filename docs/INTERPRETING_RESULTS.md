@@ -40,7 +40,7 @@ A decisão sai de `build_ioc_decisions` com esta política (`DEFAULT_POLICY`):
 | `LOW` | ≥ 0,40 |
 | `INSUFFICIENT` | abaixo disso |
 
-No Workbench rápido, a confiança inicial de cada IOC é conservadora (teto de 0,55) porque ele só reúne evidência básica: espere `MONITOR`/`HUNT`, não `BLOCK`. Para chegar a `BLOCK`, o caso precisa de várias fontes independentes e atividade recente.
+No Workbench e na CLI, a confiança inicial de cada IOC é conservadora: teto de **0,55**, que sobe para **0,70** quando o VirusTotal marca o IOC como malicioso ou o ThreatFox o conhece (requer chave). Espere `MONITOR`/`HUNT`, não `BLOCK`. O IOC conta como **ativo** quando o domínio resolve no DNS agora. Para chegar a `BLOCK`, o caso precisa de várias fontes independentes e atividade recente.
 
 ### Risco de falso positivo
 
@@ -60,15 +60,16 @@ Domínios como `wa.me`, `whatsapp.com`, `t.me`, `google.com`, `facebook.com`, `g
 
 O `score` multiplica a confiança da extração pela força da ligação. É para **priorizar revisão**, nunca prova.
 
-## Fontes: `OK`, `SKIPPED`, `UNAVAILABLE`
+## Fontes: `OK`, `SKIPPED`, `UNAVAILABLE`, `TIMEOUT`
 
 | Status | Leitura |
 |---|---|
 | `OK` | rodou |
+| `UNAVAILABLE` | tentou e falhou (rede, `HTTP 403`, cota, mudança de formato); a *observação* diz o motivo |
+| `TIMEOUT` | estourou o prazo total da busca; o resultado é **parcial** |
 | `SKIPPED_MISSING_SECRET` | falta a chave (opcional): não é erro |
-| `SKIPPED_BUDGET` | fora da profundidade escolhida |
-| `NOT_NEEDED` | a fonte não se aplica a este tipo de alvo |
-| `UNAVAILABLE` | tentou e falhou (timeout, cota, mudança de formato) |
+| `SKIPPED_MODE` | só roda em `SAFE_ENRICHMENT` (Common Crawl) |
+| `NOT_NEEDED` | o alvo não tem o que consultar (telefone, hash sem chave, texto sem domínio/IP) |
 
 **Ausência de resultado não é "benigno".** Pode ser domínio novo, fonte que não indexa aquilo, cota esgotada ou timeout. Sempre olhe a saúde das fontes antes de concluir algo pela falta de dados.
 

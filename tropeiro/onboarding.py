@@ -41,32 +41,9 @@ SUPPORT_NOTES = {
 }
 
 def detect_input_type(text: str) -> str:
-    value = (text or "").strip()
-    if not value:
-        return "AUTO"
-    parts = [x.strip() for x in re.split(r"[\n,;]+", value) if x.strip()]
-    if len(parts) > 1:
-        kinds = {detect_input_type(x) for x in parts}
-        kinds.discard("AUTO")
-        return next(iter(kinds)) if len(kinds) == 1 else "MULTI_IOC"
-    item = parts[0] if parts else value
-    if re.match(r"^https?://", item, re.I):
-        return "URL"
-    try:
-        ipaddress.ip_address(item)
-        return "IP"
-    except ValueError:
-        pass
-    if re.fullmatch(r"[A-Fa-f0-9]{32}|[A-Fa-f0-9]{40}|[A-Fa-f0-9]{64}", item):
-        return "HASH"
-    if re.fullmatch(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", item, re.I):
-        return "EMAIL"
-    digits = re.sub(r"\D", "", item)
-    if 10 <= len(digits) <= 15 and re.search(r"\d", item):
-        return "PHONE"
-    if re.fullmatch(r"(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}", item):
-        return "DOMAIN"
-    return "LURE_TEXT"
+    """Detecta o tipo do alvo (regras em `tropeiro.targets.classify`)."""
+    from .targets import classify
+    return classify(text)
 
 def input_label(kind: str) -> str:
     return TYPE_LABELS.get((kind or "AUTO").upper(), TYPE_LABELS["AUTO"])
@@ -135,3 +112,43 @@ def budget_limits(budget: str, target_count: int = 1) -> Dict[str, int]:
         values["DNSTWIST_MAX"] = max(25, values["DNSTWIST_MAX"] // target_count)
         values["URLSCAN_DETAIL_MAX"] = max(2, values["URLSCAN_DETAIL_MAX"] // min(target_count, 10))
     return values
+
+
+# --- plano de fontes por tipo de alvo (usado pelo pipeline, pela CLI e pelo Workbench) -----------------------------
+
+SOURCE_FLAGS = {          # fonte -> (flag, assunto, exige chave, só em SAFE_ENRICHMENT)
+    "dns": ("ENABLE_DNS", "domain", None, False),
+    "rdap": ("ENABLE_RDAP", "domain", None, False),
+    "crt.sh": ("ENABLE_CT", "domain", None, False),
+    "urlscan": ("ENABLE_URLSCAN", "domain", None, False),
+    "otx": ("ENABLE_OTX", "domain", None, False),
+    "wayback": ("ENABLE_WAYBACK", "domain", None, False),
+    "commoncrawl": ("ENABLE_COMMONCRAWL", "domain", None, True),
+    "virustotal": ("ENABLE_VT", "any", "VT_API_KEY", False),
+    "threatfox": ("ENABLE_THREATFOX", "any", "THREATFOX_AUTH_KEY", False),
+    "dns:PTR": ("ENABLE_PTR", "ip", None, False),
+    "rdap_ip": ("ENABLE_RDAP_IP", "ip", None, False),
+    "urlscan_ip": ("ENABLE_URLSCAN_IP", "ip", None, False),
+}
+
+def features_for_target(kinds: set, mode: str = "PASSIVE", budget: str = "balanced", secrets: Dict[str, str] | None = None) -> Dict[str, bool]:
+    """Quais fontes ligar, a partir dos **tipos de assunto presentes** ({"domain","ip","hash"}), do modo e das chaves."""
+    secrets = secrets or {}
+    out: Dict[str, bool] = {}
+    for name, (flag, subj, key, safe_only) in SOURCE_FLAGS.items():
+        applies = bool(kinds) if subj == "any" else subj in kinds
+        out[flag] = bool(applies and (not key or secrets.get(key)) and (not safe_only or mode == "SAFE_ENRICHMENT"))
+    out["ENABLE_URLSCAN_DETAILS"] = out["ENABLE_URLSCAN"]
+    return out
+
+def skip_reason(source: str, kinds: set, mode: str, secrets: Dict[str, str] | None = None) -> tuple[str, str] | None:
+    """(estado, explicação) se a fonte se aplica ao alvo mas está desligada; None se aplica e está ligada ou não se aplica."""
+    secrets = secrets or {}
+    flag, subj, key, safe_only = SOURCE_FLAGS[source]
+    if not (bool(kinds) if subj == "any" else subj in kinds):
+        return None
+    if key and not secrets.get(key):
+        return "SKIPPED_MISSING_SECRET", f"defina {key} para ativar (opcional)"
+    if safe_only and mode != "SAFE_ENRICHMENT":
+        return "SKIPPED_MODE", "só no modo SAFE_ENRICHMENT"
+    return None

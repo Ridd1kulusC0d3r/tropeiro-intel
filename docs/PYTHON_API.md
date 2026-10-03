@@ -6,6 +6,93 @@ Tudo que a CLI e o Workbench fazem está disponível como biblioteca. **Cada blo
 pip install -e .            # núcleo
 ```
 
+## Investigação completa
+
+`investigate` é **o mesmo pipeline** do Workbench e de `tropeiro search`: classifica o alvo, planeja as fontes, coleta em paralelo (com prazo), decide por IOC, extrai entidades, compara com a memória e gera relatório, STIX, MISP, Sigma e ZIP.
+
+```python no-run
+from tropeiro.pipeline import investigate
+
+r = investigate("example.com", mode="PASSIVE", budget="balanced", ai_mode="OFF",
+                memory_enabled=False, deadline=60,
+                on_source=lambda linha: print(linha["source"], linha["status"]))   # progresso ao vivo
+print(r["summary"]["evidence"], r["summary"]["sources_ok"], r["package_path"])
+for d in r["iocs"]:
+    print(d["ioc"], d["decision"], d["confidence_band"])
+```
+
+O resultado traz `summary`, `iocs` (decisões), `context_iocs` (plataformas legítimas), `sources` (um estado por consulta), `evidence`, `relationships`, `hybrid_entities`, `ai_edges`, `batches`, `similar_lures`, `exports`, `report_path` e `package_path`. Exemplo **offline** (um telefone não consulta nenhuma fonte):
+
+```python
+import tempfile
+from pathlib import Path
+from tropeiro.pipeline import investigate
+
+with tempfile.TemporaryDirectory() as pasta:
+    r = investigate("+55 11 99999-0000", memory_enabled=False, use_cache=False, workspace=Path(pasta) / "caso")
+    assert r["summary"]["input_type"] == "PHONE" and r["summary"]["sources_ok"] == 0
+    assert r["sources"][0]["status"] == "NOT_NEEDED" and "privacidade" in r["sources"][0]["error"]
+    assert Path(r["report_path"]).exists() and Path(r["package_path"]).exists()
+```
+
+### Alvos: classificar e extrair
+
+```python
+from tropeiro.targets import classify, parse_target
+
+isca = "Receita Federal: regularize em hxxps://receita-fake[.]com/cpf ou https://wa.me/5511999990000. Banco Aurora S.A."
+assert classify(isca) == "LURE_TEXT"                      # texto com palavras é isca, mesmo com 13 dígitos
+assert classify("+55 11 99999-0000") == "PHONE" and classify("example[.]com") == "DOMAIN"
+
+t = parse_target("login.exemplo-fake.com, 8.8.4.4, 10.0.0.1, wa.me")
+assert t.kind == "MULTI_IOC" and t.domains == ["exemplo-fake.com"] and t.ips == ["8.8.4.4"]
+assert set(t.skipped_legit) == {"10.0.0.1", "wa.me"}          # IP privado e plataforma legítima: contexto, não alvo
+```
+
+### Plano de fontes (sem rede)
+
+`plan_investigation` mostra **o que seria consultado**, sem fazer nenhuma chamada:
+
+```python
+from tropeiro.pipeline import plan_investigation
+from tropeiro.targets import parse_target
+
+ctx, tarefas, puladas = plan_investigation(parse_target("exemplo-fake.com"), "PASSIVE", "balanced", {})
+fontes = {t.source for t in tarefas}
+assert {"dns:A", "rdap", "crt.sh", "urlscan", "otx", "wayback"} <= fontes and "commoncrawl" not in fontes
+assert {p["status"] for p in puladas} == {"SKIPPED_MODE", "SKIPPED_MISSING_SECRET"}   # Common Crawl, VirusTotal, ThreatFox
+
+ctx, tarefas, _ = plan_investigation(parse_target("8.8.4.4"), "PASSIVE", "balanced", {})
+assert {t.source for t in tarefas} == {"dns:PTR", "rdap_ip", "urlscan_ip"}
+```
+
+### Executor de fontes
+
+`run_tasks` roda tarefas em paralelo, com prazo; o que não termina vira `TIMEOUT` e o resto volta normalmente:
+
+```python
+import time
+from tropeiro.models import Observation
+from tropeiro.sources import Task, run_tasks
+
+def lenta():
+    time.sleep(2)
+    return []
+
+obs, linhas = run_tasks([Task("rapida", "x", lambda: [Observation("x", "domain", "demo", "ok")]), Task("lenta", "x", lenta)], deadline=0.5)
+assert [o.value for o in obs] == ["ok"]
+assert {l["source"]: l["status"] for l in linhas} == {"rapida": "OK", "lenta": "TIMEOUT"}
+```
+
+### Diagnóstico
+
+```python
+from tropeiro.doctor import run_checks, verdict
+
+checks = run_checks(network=False)                        # com network=True testa cada fonte
+assert verdict(checks) in {"OK", "DEGRADADO"} and any(c.name == "Python" for c in checks)
+```
+
 ## Extração híbrida
 
 `extract_hybrid` combina regras determinísticas (sempre) e GLiNER (opcional). Funciona **sem modelo**.

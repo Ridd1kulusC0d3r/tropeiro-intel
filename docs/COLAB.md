@@ -50,6 +50,12 @@ Every executable cell is preceded by a help card explaining:
 
 The larger notebook is intentional: the investigation should be inspectable rather than hidden behind one opaque button.
 
+## Novidades na 4.8
+
+- **Etapa 04** ganhou um formulário (`ALVO` e `TIPO`, campos `#@param`) além dos widgets. Se os widgets não aparecerem no Colab (comum quando o `ipywidgets` é atualizado), altere o formulário e execute a célula de novo. A célula também liga o gerenciador de widgets do Colab.
+- Os cartões **"Antes de executar"** voltaram a ser cartões: antes eles despejavam o código da célula no texto.
+- **Etapa 06A (Workbench no Colab):** o Gradio exige link público no Colab (`gradio.live`) e agora é ele que decide; antes a interface não aparecia. Não cole dados sensíveis de vítimas. Para diagnosticar: `!tropeiro doctor`.
+
 ## Novidades na 4.7
 
 - **Etapa 08** agora aceita texto com defang (`hxxps://x[.]com`).

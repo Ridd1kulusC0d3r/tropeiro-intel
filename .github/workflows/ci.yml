@@ -24,6 +24,10 @@ jobs:
       - run: pip install -e ".[dev]"
       - run: ruff check --select E9,F63,F7,F82 .
       - run: pytest -q
+      - name: CLI offline (diagnóstico e extração de isca)
+        run: |
+          tropeiro doctor --offline
+          tropeiro lure examples/lure_receita.txt --case CI --out "$RUNNER_TEMP/lure" | head -5
 
   workbench:
     # o Workbench precisa funcionar com Gradio 5 e 6 (em 6 o tema passa do Blocks() para o launch())

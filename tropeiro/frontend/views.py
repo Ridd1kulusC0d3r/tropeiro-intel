@@ -13,14 +13,50 @@ def _e(v): return html.escape(str(v),quote=True)
 def _kind(label,known_types):
     return known_types.get(label,'other')
 
+STATUS_LABEL={"OK":"✓ OK","UNAVAILABLE":"✗ indisponível","TIMEOUT":"⏱ prazo","SKIPPED_MISSING_SECRET":"– sem chave","SKIPPED_MODE":"– outro modo",
+              "SKIPPED_BUDGET":"– profundidade","NOT_NEEDED":"– n/a"}
+
 def kpi_html(summary: Mapping[str,Any], hybrid: List[Mapping[str,Any]], ai_edges: List[Mapping[str,Any]]) -> str:
     cards=[(summary.get('evidence',0),'evidências'),(summary.get('relationships',0),'relações'),
            (len(hybrid),'entidades extraídas'),(len(ai_edges),'ligações propostas (IA)'),
            (summary.get('sources_ok',0),'fontes OK'),(summary.get('memory_matches',0),'casos relacionados')]
     items=''.join(f"<div class='ti-kpi'><b>{_e(n)}</b><span>{_e(l)}</span></div>" for n,l in cards)
-    return (f"<div class='ti-card ti-summary'><div class='ti-eyebrow'>INVESTIGAÇÃO CONCLUÍDA · {_e(summary.get('case_id',''))}</div>"
+    notes=[f"Concluído em {summary.get('elapsed_s','?')} s (prazo {summary.get('deadline_s','?')} s)"]
+    if summary.get('sources_failed'): notes.append(f"{summary['sources_failed']} fonte(s) indisponível(is): veja Dados → Saúde das fontes")
+    if summary.get('sources_skipped'): notes.append(f"{summary['sources_skipped']} pulada(s) por modo, chave ou tipo de alvo")
+    if summary.get('context_only'): notes.append(f"{summary['context_only']} IOC(s) de plataformas legítimas ficaram só como contexto")
+    return (f"<div class='ti-card ti-summary'><div class='ti-eyebrow'>INVESTIGAÇÃO CONCLUÍDA · {_e(summary.get('case_id',''))} · {_e(summary.get('input_type',''))}</div>"
             f"<h2>{_e(str(summary.get('target',''))[:90])}</h2><div class='ti-kpis'>{items}</div>"
-            f"<p class='ti-note'>{_e(summary.get('ai',''))}</p></div>")
+            f"<p class='ti-note'>{_e(' · '.join(notes))}</p><p class='ti-note'>{_e(summary.get('ai',''))}</p></div>")
+
+def progress_html(elapsed: float, deadline: float, rows: List[Mapping[str,Any]], planned: int=0) -> str:
+    pct=min(100,int(100*elapsed/max(deadline,1)))
+    done=''.join(f"<li class='ti-st-{_e(r.get('status','')).lower()}'><b>{_e(STATUS_LABEL.get(r.get('status',''),r.get('status','')))}</b> "
+                 f"{_e(r.get('source',''))} <span class='ti-note'>{_e(r.get('subject',''))} · {_e(r.get('seconds',0))} s"
+                 f"{' · '+_e(r['error']) if r.get('error') else ''}</span></li>" for r in rows[-14:])
+    total=f" de {planned}" if planned else ""
+    return (f"<div class='ti-card ti-summary'><div class='ti-eyebrow'>COLETANDO EM PARALELO · {elapsed:.0f}s de no máximo {deadline:.0f}s</div>"
+            f"<h2>{len([r for r in rows if r.get('status') in ('OK','UNAVAILABLE','TIMEOUT')])}{_e(total)} consultas concluídas</h2><div class='ti-bar' style='width:100%'><i style='width:{pct}%'></i></div>"
+            f"<ul class='ti-src'>{done}</ul><p class='ti-note'>Uma fonte lenta não trava a busca: ao fim do prazo o resultado sai parcial.</p></div>")
+
+def error_html(message: str) -> str:
+    return (f"<div class='ti-card ti-summary ti-error'><div class='ti-eyebrow'>A BUSCA NÃO CONCLUIU</div><h2>{_e(message[:300])}</h2>"
+            "<p class='ti-note'>Abra <b>Diagnóstico do ambiente</b> (abaixo, no painel esquerdo) ou rode <code>tropeiro doctor</code> no terminal. "
+            "Para repetir sem interface: <code>tropeiro search SEU_ALVO</code>.</p></div>")
+
+def diagnostics_html(checks) -> str:
+    icon={"OK":"✓","WARN":"⚠","FAIL":"✗"}
+    rows=''.join(f"<tr class='ti-dg-{_e(c.status).lower()}'><td>{icon[c.status]}</td><td>{_e(c.name)}</td><td>{_e(c.detail)}</td>"
+                 f"<td class='ti-note'>{_e(c.hint) if c.status!='OK' else ''}</td></tr>" for c in checks)
+    from ..doctor import verdict
+    return (f"<div class='ti-card' style='padding:14px'><div class='ti-eyebrow'>DIAGNÓSTICO · {_e(verdict(checks))}</div>"
+            f"<table class='ti-table'><tbody>{rows}</tbody></table></div>")
+
+def source_rows(sources: Iterable[Mapping[str,Any]]) -> List[Dict[str,Any]]:
+    order={"UNAVAILABLE":0,"TIMEOUT":1,"OK":2}
+    return [{"fonte":r.get("source"),"assunto":r.get("subject"),"estado":STATUS_LABEL.get(r.get("status"),r.get("status")),
+             "itens":r.get("items"),"segundos":r.get("seconds"),"observação":r.get("error")}
+            for r in sorted(sources,key=lambda r:(order.get(r.get("status"),3),str(r.get("source"))))]
 
 def graph_svg(rel_rows: Iterable[Mapping[str,Any]], ai_edges: Iterable[Mapping[str,Any]]=(), entities: Iterable[Mapping[str,Any]]=(),
               width: int=960, height: int=430, max_nodes: int=70) -> str:
@@ -116,6 +152,9 @@ footer{display:none!important}
 .ti-type{font:600 11px ui-monospace,monospace;color:var(--muted);text-transform:uppercase}
 .ti-badge{font:700 10px ui-monospace,monospace;padding:3px 7px;border-radius:6px;margin-right:4px;letter-spacing:.06em}
 .ti-rule{background:#E8A33D22;color:var(--acc)}.ti-gliner{background:#9B8CFF22;color:var(--ai)}
+.ti-error{border-color:#FF7A6B!important}.ti-error h2{color:#FF7A6B}
+.ti-src{list-style:none;padding:0;margin:12px 0 4px;font-size:13px;color:#C9CED6}.ti-src li{padding:3px 0}
+.ti-dg-fail td{color:#FF7A6B}.ti-dg-warn td{color:#E8A33D}
 .ti-legit{background:#4FB3BF22;color:#4FB3BF}
 .ti-bar{height:6px;background:#1B1F26;border-radius:4px;width:120px;margin-bottom:3px}.ti-bar i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--ai),var(--acc))}
 """

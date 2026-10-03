@@ -1,475 +1,248 @@
+"""Workbench (Gradio): camada fina sobre `tropeiro.pipeline`. Toda a lógica de investigação vive no pipeline."""
 from __future__ import annotations
 
-import json
-import os
-import re
-import tempfile
-import time
+import queue, shutil, socket, tempfile, threading, time
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import pandas as pd
 
-from ..models import Observation, now_iso
-from ..utils import extract_iocs, hostname, root_domain, refang
-from ..config import Settings
-from ..collectors import dns, rdap, crtsh, urlscan, threatintel, history
-from . import enrich
-from .. import http
-from ..correlation.registration import registration_batches
-from ..evidence.ledger import build as build_ledger
-from ..intelligence.warninglists import WarningListEngine
-from ..intelligence.decision_objects import build_ioc_decisions
-from ..reporting.context import build_report_data
-from ..reporting.rich_html import build_report
-from ..reporting.exporter import export_selected, zip_exports, write_manifest
-from ..onboarding import detect_input_type, recommended_features, budget_limits
-from ..memory import CaseMemory, default_memory_path
-from ..ai import (
-    GLiNERLocal, QwenLocalChat, build_ai_text_corpus, build_evidence_packet,
-    run_qwen_analysis, attach_ai_overlay, runtime_profile, extract_hybrid, correlate_entities, lure_similarity
-)
-from ..intelligence.br_lures import detect_br_lures
-from ..timeline import build_timeline, timeline_markdown
-from ..reporting.stix import bundle_from_iocs
-from ..reporting.misp import misp_event
-from ..intelligence.sigma import sigma_rules
-from ..intelligence.legit_domains import partition_iocs, is_known_legit
+from ..doctor import run_checks
+from ..pipeline import default_base, investigate, relationship_rows          # noqa: F401  (relationship_rows é reexportado: API estável)
+from ..sources import BUDGET_DEADLINE
+from ..targets import parse_target
+from .views import (APP_CSS, HERO, IOC_COLS, diagnostics_html, edges_rows, error_html, graph_svg, ioc_rows, kpi_html, lure_html,
+                    progress_html, source_rows)
 
-from .views import APP_CSS, HERO, kpi_html, graph_svg, lure_html, edges_rows, ioc_rows
 
-def _secret(name: str) -> str:
-    try:
-        from google.colab import userdata
-        return userdata.get(name) or ""
-    except Exception:
-        return os.getenv(name,"")
+def run_quick_case(*args, **kwargs):
+    """Compatibilidade: a investigação do Workbench é a `pipeline.investigate`."""
+    return investigate(*args, **kwargs)
 
-def _safe(source: str, fn, status: List[Dict[str,Any]], *args, **kwargs):
-    t=time.time()
-    try:
-        value=fn(*args,**kwargs)
-        size=len(value) if hasattr(value,"__len__") else 1
-        status.append({"source":source,"status":"OK","items":size,"seconds":round(time.time()-t,2),"error":""})
-        return value
-    except Exception as exc:
-        status.append({"source":source,"status":"UNAVAILABLE","items":0,"seconds":round(time.time()-t,2),"error":str(exc)[:260]})
-        return None
 
-def _observe(rows: List[Observation], entity, entity_type, source, value, confidence="observed", notes=""):
-    rows.append(Observation(str(entity),str(entity_type),str(source),str(value),confidence=confidence,notes=str(notes)))
+def _normalize_target(target: str, selected_type: str = "AUTO") -> Tuple[str, Dict[str, List[str]]]:
+    """Compatibilidade: (tipo, iocs) de um alvo. A lógica está em `tropeiro.targets.parse_target`."""
+    t = parse_target(target, selected_type)
+    return t.kind, t.iocs
 
-def relationship_rows(ownership: Dict[str,Any]) -> List[Dict[str,Any]]:
-    rows=[]
-    for domain,data in (ownership or {}).items():
-        for rtype,values in (data.get("dns") or {}).items():
-            for value in values or []:
-                rows.append({"from":domain,"relationship":f"dns_{rtype.lower()}","to":value,"source":f"dns:{rtype}"})
-        for org in (data.get("rdap") or {}).get("registrant_orgs",[]) or []:
-            rows.append({"from":domain,"relationship":"registrant_org","to":org,"source":"rdap"})
-        for name in data.get("cert_names",[])[:100]:
-            if name and name!=domain:
-                rows.append({"from":domain,"relationship":"certificate_name","to":name,"source":"crt.sh"})
-    return rows
 
-def _normalize_target(target: str, selected_type: str) -> Tuple[str,Dict[str,List[str]]]:
-    kind=detect_input_type(target) if selected_type=="AUTO" else selected_type
-    target=refang(target)
-    iocs=extract_iocs(target)
-    if kind=="DOMAIN" and target.strip():
-        iocs.setdefault("domain",[])
-        iocs["domain"]=sorted(set(iocs["domain"]+[hostname(target.strip())]))
-    elif kind=="URL" and target.strip():
-        iocs.setdefault("url",[])
-        iocs["url"]=sorted(set(iocs["url"]+[target.strip()]))
-        h=hostname(target.strip())
-        if h:
-            iocs.setdefault("domain",[])
-            iocs["domain"]=sorted(set(iocs["domain"]+[h]))
-    elif kind=="IP":
-        iocs.setdefault("ip",[])
-        iocs["ip"]=sorted(set(iocs["ip"]+[target.strip()]))
-    elif kind=="EMAIL":
-        iocs.setdefault("email",[])
-        iocs["email"]=sorted(set(iocs["email"]+[target.strip().lower()]))
-    elif kind=="HASH":
-        iocs.setdefault("hash",[])
-        iocs["hash"]=sorted(set(iocs["hash"]+[target.strip().lower()]))
-    elif kind=="PHONE":
-        digits=re.sub(r"\D","",target)
-        iocs.setdefault("phone",[])
-        iocs["phone"]=sorted(set(iocs["phone"]+[digits]))
-    return kind,iocs
-
-def run_quick_case(
-    target: str,
-    target_type: str="AUTO",
-    case_id: str="TI-UI-001",
-    analyst: str="Analista",
-    brand: str="",
-    impersonated_org: str="",
-    mode: str="PASSIVE",
-    budget: str="balanced",
-    ai_mode: str="OFF",
-    memory_enabled: bool=True,
-    memory_path: str="",
-    progress=None,
-):
-    if not (target or "").strip():
-        raise ValueError("Informe um domínio, URL, IP, e-mail, hash, telefone ou texto.")
-
-    def step(frac,msg):
-        if progress is not None:
-            progress(frac,desc=msg)
-
-    step(.03,"Preparando o caso")
-    kind,iocs=_normalize_target(target,target_type)
-    case_id=re.sub(r"[^A-Za-z0-9_.-]+","_",case_id or "TI-UI-001")
-    base=Path("/content") if Path("/content").is_dir() else Path(tempfile.gettempdir())
-    workspace=base/f"tropeiro_ui_{case_id}"
-    workspace.mkdir(parents=True,exist_ok=True)
-    http.set_cache(base/".tropeiro_cache" if base==Path("/content") else Path.home()/".tropeiro"/"cache",ttl=3600)
-    settings=Settings(case_id=case_id,analyst=analyst or "Analista",brand=brand or "",workspace=workspace,mode=mode,provider_budget=budget)
-
-    obs: List[Observation]=[]
-    status=[]
-    ownership={}
-    for typ,values in iocs.items():
-        for value in values:
-            _observe(obs,value,typ,"manual/input",value,notes="Frontend guided input")
-
-    domains=sorted(set(root_domain(x) for x in iocs.get("domain",[]) if root_domain(x) and not is_known_legit(x)))   # wa.me, google.com... são contexto, não alvo de coleta
-    step(.12,"DNS, RDAP e certificados")
-
-    secrets={k:_secret(k) for k in ("VT_API_KEY","THREATFOX_AUTH_KEY","DNSDUMPSTER_API_KEY","FOFA_API_KEY","CENSYS_PAT")}
-    feats=recommended_features("MULTI_IOC" if kind in ("LURE_TEXT","MULTI_IOC") else kind,mode,budget,secrets,has_brand=bool(brand))
-    limits=budget_limits(budget,len(domains))
-    rdap_rows=[]
-    for idx,domain in enumerate(domains):
-        data={"domain":domain,"dns":{},"rdap":{},"cert_names":[]}
-        ownership[domain]=data
-        if feats["ENABLE_DNS"]:
-            for rtype in ("A","AAAA","CNAME","MX","NS"):
-                values=_safe(f"dns:{rtype}",dns.query,status,domain,rtype) or []
-                data["dns"][rtype]=values
-                for value in values:
-                    _observe(obs,domain,"domain",f"dns:{rtype}",value)
-        if feats["ENABLE_RDAP"]:
-            r=_safe("rdap",rdap.lookup,status,domain) or {}
-            data["rdap"]=r
-            for org in r.get("registrant_orgs",[]) or []:
-                _observe(obs,domain,"domain","rdap:registrant_org",org)
-            for org in r.get("registrar_orgs",[]) or []:
-                _observe(obs,domain,"domain","rdap:registrar_org",org)
-            for key in ("created","updated","expires"):
-                if r.get(key):
-                    _observe(obs,domain,"domain",f"rdap:{key}",r[key])
-            if r.get("created"):
-                rdap_rows.append({"domain":domain,"created":r["created"],"registrar":"; ".join(r.get("registrar_orgs") or []),"nameservers":r.get("nameservers") or []})
-        if feats["ENABLE_CT"]:
-            ct=_safe("crt.sh",crtsh.lookup,status,domain) or []
-            names=set()
-            for row in ct if isinstance(ct,list) else []:
-                for name in str(row.get("name_value","")).splitlines():
-                    name=name.strip().lower().lstrip("*.")
-                    if name:
-                        names.add(name)
-            data["cert_names"]=sorted(names)[:500]
-            for name in data["cert_names"]:
-                _observe(obs,domain,"domain","crt.sh",name)
-
-        step(.25 + (.20*((idx+1)/max(1,len(domains)))),"Enriquecendo fontes públicas")
-        if feats["ENABLE_URLSCAN"]:
-            u=_safe("urlscan",urlscan.search,status,domain,_secret("URLSCAN_API_KEY")) or {}
-            results=(u.get("results",[]) if isinstance(u,dict) else [])
-            for row in results[:100]:
-                page=row.get("page",{});task=row.get("task",{})
-                value=page.get("url") or task.get("url")
-                if value:
-                    _observe(obs,domain,"domain","urlscan",value)
-            if feats["ENABLE_URLSCAN_DETAILS"]:
-                for row in [x for x in results if x.get("_id")][:limits["URLSCAN_DETAIL_MAX"]]:
-                    scan=_safe("urlscan:result",urlscan.result,status,row["_id"],_secret("URLSCAN_API_KEY")) or {}
-                    obs.extend(enrich.durable_obs(domain,scan))
-        if feats["ENABLE_OTX"]:
-            o=_safe("otx",threatintel.otx_domain,status,domain) or {}
-            for row in (o.get("url_list",[]) if isinstance(o,dict) else [])[:200]:
-                value=row.get("url") if isinstance(row,dict) else None
-                if value:
-                    _observe(obs,domain,"domain","otx",value)
-        if feats["ENABLE_WAYBACK"]:
-            obs.extend(enrich.wayback_obs(domain,_safe("wayback",history.wayback,status,domain,2000) or []))
-        if feats["ENABLE_COMMONCRAWL"]:
-            obs.extend(enrich.commoncrawl_obs(domain,_safe("commoncrawl",history.commoncrawl,status,domain,500) or []))
-        if feats["ENABLE_VT"]:
-            obs.extend(enrich.virustotal_obs(domain,_safe("virustotal",threatintel.virustotal_domain,status,domain,secrets["VT_API_KEY"]) or {}))
-        if feats["ENABLE_THREATFOX"]:
-            obs.extend(enrich.threatfox_obs(domain,_safe("threatfox",threatintel.threatfox_search,status,domain,secrets["THREATFOX_AUTH_KEY"]) or {}))
-
-    batches=registration_batches(rdap_rows)
-
-    step(.52,"Montando evidências")
-    ledger=build_ledger(obs,settings.source_reliability)
-    rels=relationship_rows(ownership)
-
-    ioc_candidates=[]
-    for typ,values in iocs.items():
-        for value in values:
-            matching=[o for o in obs if o.entity==value or o.value==value]
-            families=len(set(o.source.split(":")[0] for o in matching))
-            conf=min(.55,.15 + min(.20,len(matching)*.025) + min(.20,families*.05))
-            ioc_candidates.append({
-                "value":value,"type":typ,"confidence":conf,"active":False,
-                "evidence_count":len(matching),"source_families":families,
-                "campaign":case_id,"context":{},"rationale":["Quick UI triage; analyst validation required"]
-            })
-    decisions=build_ioc_decisions(ioc_candidates,WarningListEngine())
-
-    step(.60,"Extraindo e correlacionando entidades")
-    lure_text=refang(target) if kind in ("LURE_TEXT","MULTI_IOC") else ""
-    gliner=None
-    hybrid_status="regras"
-    if ai_mode!="OFF":
-        try:
-            gliner=GLiNERLocal(); gliner.load(); hybrid_status="regras + GLiNER"
-        except Exception as exc:
-            gliner=None; hybrid_status="regras (GLiNER indisponível: "+str(exc)[:120]+")"
-    hybrid_entities=extract_hybrid(lure_text,gliner) if lure_text else []
-    known=set(ledger["entity"])|set(ledger["value"]) if not ledger.empty else set()
-    ai_edges=correlate_entities(hybrid_entities,known)
-    lures=detect_br_lures(lure_text)
-
-    ns={
-        "CASE_ID":case_id,"ANALYST":analyst,"BRAND":brand,"IMPERSONATED_ORG":impersonated_org,
-        "MODE":mode,"WORKSPACE":workspace,"STATUS":status,"OWNERSHIP":ownership,
-        "LEDGER_DF":ledger,"IOC_DECISIONS":decisions,
-        "RELATIONSHIP_GRAPH":{"nodes":[],"edges":rels},
-        "EXECUTIVE_ASSESSMENT":{
-            "judgment":f"Quick investigation of {target}",
-            "implication":"Review evidence and source health before operational action."
-        },
-    }
-    report_data=build_report_data(ns,version="frontend")
-
-    ai_summary={}
-    ai_entities=[]
-    ai_status="AI desligada"
-    if ai_mode!="OFF":
-        step(.68,"Executando camada de IA")
-        try:
-            corpus=build_ai_text_corpus(report_data,target if kind=="LURE_TEXT" else "","")
-            gliner=gliner or GLiNERLocal()
-            ai_entities=gliner.extract(corpus)
-            ai_status=f"GLiNER: {len(ai_entities)} entidades candidatas"
-            if ai_mode in {"GLINER_QWEN","AUTO"} and (ai_mode=="GLINER_QWEN" or runtime_profile().get("gpu")):
-                packet=build_evidence_packet(report_data)
-                qwen=QwenLocalChat()
-                ai_summary=run_qwen_analysis(qwen,packet,language="pt-BR",max_new_tokens=900)
-                report_data=attach_ai_overlay(report_data,ai_entities,ai_summary,{"frontend_ai":ai_status},packet)
-                ai_status+=f" · Qwen ({qwen.model_name}) concluído"+(" — modelo pequeno: revise sempre a análise" if "0.6B" in qwen.model_name else "")
-            else:
-                report_data=attach_ai_overlay(report_data,ai_entities,{},{"frontend_ai":ai_status})
-        except Exception as exc:
-            ai_status="IA indisponível: "+str(exc)[:300]
-
-    step(.76,"Comparando com casos anteriores")
-    memory_matches=[];artifact_prevalence=[];memory_stats={};similar_lures=[]
-    resolved_memory_path=(memory_path or "").strip() or str(default_memory_path())
-    if memory_enabled:
-        try:
-            memory=CaseMemory(resolved_memory_path)
-            memory_matches=memory.compare_report(report_data,exclude_case_id=case_id,limit=10)
-            artifact_prevalence=memory.prevalence_for_report(report_data,exclude_case_id=case_id)[:200]
-            memory_stats=memory.stats()
-            report_data["cross_case_intelligence"]={
-                "status":"OK","related_cases":memory_matches,
-                "artifact_prevalence":artifact_prevalence,
-                "memory_stats":memory_stats,"same_operator_inferred":False
-            }
-            if lure_text:
-                similar_lures=lure_similarity(lure_text,memory.lure_texts(exclude_case_id=case_id))
-            memory.store_case({**report_data,"lure_text":lure_text} if lure_text else report_data)   # o texto fica só no banco local, nunca no case.json exportado
-            memory_stats=memory.stats()
-            report_data["cross_case_intelligence"]["memory_stats"]=memory_stats
-        except Exception as exc:
-            report_data["cross_case_intelligence"]={
-                "status":"UNAVAILABLE","error":str(exc)[:400],
-                "related_cases":[],"artifact_prevalence":[]
-            }
-    else:
-        resolved_memory_path=""
-        report_data["cross_case_intelligence"]={
-            "status":"DISABLED","related_cases":[],"artifact_prevalence":[]
-        }
-
-    step(.82,"Gerando relatório")
-    report_dir=workspace/"report"
-    report_dir.mkdir(parents=True,exist_ok=True)
-    report_path=report_dir/"Tropeiro_Intel_Report.html"
-    build_report(report_data,report_path)
-
-    created=export_selected(
-        report_data,workspace/"export",
-        {"report_html","case_json","evidence_ledger_csv","ioc_decisions_csv"},
-        report_path
-    )
-    all_iocs,ctx_iocs=partition_iocs({k:v for k,v in iocs.items() if k in ("domain","url","ip","email","hash","phone")})
-    cti_dir=workspace/"export"; cti_dir.mkdir(parents=True,exist_ok=True)
-    (cti_dir/"stix.json").write_text(bundle_from_iocs(all_iocs,case_id=case_id,context_only=ctx_iocs).serialize(pretty=True),encoding="utf-8")
-    (cti_dir/"misp.json").write_text(json.dumps(misp_event(case_id,all_iocs,context_only=ctx_iocs),ensure_ascii=False,indent=2),encoding="utf-8")
-    for k,v in sigma_rules(all_iocs,case_id).items(): (cti_dir/f"sigma_{k}.yml").write_text(v+"\n",encoding="utf-8")
-    cti_files=sorted(str(x) for x in [cti_dir/"stix.json",cti_dir/"misp.json",*cti_dir.glob("sigma_*.yml")] if Path(x).exists())
-    created=[c for c in created if Path(c).name!="manifest.json"]+[Path(x) for x in cti_files]
-    created.append(write_manifest(created,cti_dir))
-    zip_path=zip_exports(created,workspace/f"Tropeiro_{case_id}_Package.zip")
-
-    step(1.0,"Concluído")
-    summary={
-        "case_id":case_id,"input_type":kind,"target":target,"domains":domains,
-        "observations":len(obs),"evidence":len(ledger),"relationships":len(rels),
-        "sources_ok":sum(1 for x in status if x.get("status")=="OK"),
-        "sources_failed":sum(1 for x in status if x.get("status")!="OK"),
-        "ai":f"{ai_status} · extração: {hybrid_status}",
-        "memory_matches":len(memory_matches),"memory_path":resolved_memory_path,
-        "report":str(report_path)
-    }
-    return {
-        "summary":summary,
-        "iocs":decisions,
-        "relationships":rels,
-        "evidence":ledger.to_dict("records") if not ledger.empty else [],
-        "sources":status,
-        "ai_entities":ai_entities,
-        "hybrid_entities":hybrid_entities,"ai_edges":ai_edges,"lures":lures,
-        "timeline_md":timeline_markdown(build_timeline(ledger)),
-        "related_cases":memory_matches,"artifact_prevalence":artifact_prevalence,"exports":cti_files,
-        "batches":batches,"similar_lures":similar_lures,
-        "ai_analysis":ai_summary,
-        "report_path":str(report_path),
-        "package_path":str(zip_path),
-    }
-
-def _df(rows):
-    if not rows:
-        return pd.DataFrame()
-    if isinstance(rows,pd.DataFrame):
+def _df(rows, cols=None):
+    """DataFrame para a tabela; vazio, mantém os cabeçalhos (senão o Gradio mostra colunas "1 2 3")."""
+    if isinstance(rows, pd.DataFrame):
         return rows
-    return pd.DataFrame(rows)
+    if rows:
+        return pd.DataFrame(rows)
+    return pd.DataFrame(columns=cols) if cols else pd.DataFrame()
+
+
+def relation_table(rows):
+    return [{"de": r["from"], "relação": r["relationship"], "para": r["to"], "fonte": r["source"]} for r in rows or []]
+
 
 def batch_rows(batches):
-    return [{"domínios":", ".join(b["domains"]),"primeiro":b["first"],"último":b["last"],"registrar":b["registrar"],
-             "nameservers":", ".join(b["nameservers"]),"motivo":b["reason"]} for b in batches or []]
+    return [{"domínios": ", ".join(b["domains"]), "primeiro": b["first"], "último": b["last"], "registrar": b["registrar"],
+             "nameservers": ", ".join(b["nameservers"]), "motivo": b["reason"]} for b in batches or []]
+
+
+def publish_files(result: Dict[str, Any]) -> Dict[str, Any]:
+    """Copia relatório, ZIP e exportações para uma pasta que o Gradio aceita servir (a pasta temporária do sistema).
+
+    O Gradio recusa arquivos fora da pasta atual/temporária (`InvalidPathError`): sem isto, uma pasta de trabalho
+    personalizada (TROPEIRO_WORKSPACE, /content, etc.) deixava a tela sem resultado. Os originais não são tocados.
+    """
+    dest = Path(tempfile.gettempdir()) / "tropeiro_serve" / str(result["summary"]["case_id"])
+    dest.mkdir(parents=True, exist_ok=True)
+
+    def copy(p):
+        if not p:
+            return p
+        src = Path(p)
+        if not src.is_file():
+            return p
+        out = dest / src.name
+        shutil.copyfile(src, out)
+        return str(out)
+
+    return {**result, "exports": [copy(x) for x in result.get("exports") or []],
+            "report_path": copy(result.get("report_path")), "package_path": copy(result.get("package_path"))}
+
 
 def render_outputs(result):
     """Converte o resultado do caso nas saídas da interface (puro: testável sem Gradio)."""
-    s=result["summary"]; ents=result.get("hybrid_entities",[]); edges=result.get("ai_edges",[])
+    s = result["summary"]; ents = result.get("hybrid_entities", []); edges = result.get("ai_edges", [])
     return (
-        kpi_html(s,ents,edges),
-        graph_svg(result["relationships"],edges,ents),
-        _df(ioc_rows(result["iocs"])),
-        lure_html(result.get("lures",[]),ents),
-        _df(edges_rows(edges)),
-        _df(result.get("ai_entities",[])),
+        kpi_html(s, ents, edges),
+        graph_svg(result["relationships"], edges, ents),
+        _df(ioc_rows(result["iocs"]), [c for _, c in IOC_COLS]),
+        lure_html(result.get("lures", []), ents),
+        _df(edges_rows(edges), ["de", "relação", "para", "score", "extração"]),
+        _df(result.get("ai_entities", []), ["value", "label", "score", "source_context"]),
         result.get("ai_analysis") or {},
-        _df(result["relationships"]),
-        _df(result["evidence"]),
-        result.get("timeline_md","") or "_Sem eventos._",
-        _df(result["sources"]),
-        _df(result.get("related_cases",[])),
-        _df(result.get("artifact_prevalence",[])),
-        _df(batch_rows(result.get("batches",[]))),
-        _df(result.get("similar_lures",[])),
+        _df(relation_table(result["relationships"]), ["de", "relação", "para", "fonte"]),
+        _df(result["evidence"], ["evidence_id", "entity", "entity_type", "source", "value", "observed_at"]),
+        result.get("timeline_md", "") or "_Sem eventos._",
+        _df(source_rows(result["sources"]), ["fonte", "assunto", "estado", "itens", "segundos", "observação"]),
+        _df(result.get("related_cases", []), ["case_id", "similarity"]),
+        _df(result.get("artifact_prevalence", []), ["artifact_type", "value", "prevalence"]),
+        _df(batch_rows(result.get("batches", [])), ["domínios", "primeiro", "último", "registrar", "nameservers", "motivo"]),
+        _df(result.get("similar_lures", []), ["case_id", "similarity"]),
         result.get("exports") or [],
         result.get("report_path"),
         result.get("package_path"),
     )
 
+
+N_OUTPUTS = 18
+
+
+def stream_investigation(target, target_type, case_id, analyst, brand, org, mode, budget, ai_mode, memory_enabled, memory_path, noop):
+    """Gerador usado pelo botão "Executar": mostra a coleta ao vivo (fonte a fonte) e, no fim, os resultados.
+
+    Cada `yield` é uma tupla com as N_OUTPUTS saídas; `noop` é o valor "não mude" do Gradio (`gr.update()`).
+    Erros viram um painel na tela, nunca silêncio.
+    """
+    if not (target or "").strip():
+        yield (error_html("Informe um domínio, URL, IP, e-mail, hash, telefone ou o texto da isca."), *noop); return
+    rows: List[dict] = []; box: Dict[str, Any] = {}; q: "queue.Queue[dict]" = queue.Queue()
+    deadline = BUDGET_DEADLINE.get(budget, 90.0)
+
+    def work():
+        try:
+            box["r"] = publish_files(investigate(target, target_type, case_id, analyst, brand, org, mode, budget, ai_mode,
+                                                 memory_enabled, memory_path, on_source=q.put,
+                                                 on_plan=lambda n: box.__setitem__("planned", n)))
+        except BaseException as exc:                          # noqa: BLE001 - qualquer falha deve chegar à tela
+            box["err"] = exc
+
+    th = threading.Thread(target=work, daemon=True, name="tropeiro-investigation"); th.start()
+    t0 = time.time()
+    yield (progress_html(0, deadline, rows, 0), *noop)
+    while th.is_alive():
+        th.join(0.8)
+        while not q.empty():
+            rows.append(q.get())
+        yield (progress_html(time.time() - t0, deadline, rows, box.get("planned", 0)), *noop)
+    if "err" in box:
+        yield (error_html(f"{type(box['err']).__name__}: {box['err']}"), *noop); return
+    yield render_outputs(box["r"])
+
+
 def build_app():
     import gradio as gr
     from .demo import demo_result, DEMO_LURE
 
-    def execute(target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,memory_enabled,memory_path,progress=gr.Progress()):
-        return render_outputs(run_quick_case(target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,memory_enabled,memory_path,progress))
+    def execute(*args):
+        yield from stream_investigation(*args, noop=[gr.update()] * (N_OUTPUTS - 1))
 
     def load_demo():
-        return (DEMO_LURE,"LURE_TEXT",*render_outputs(demo_result()))
+        return (DEMO_LURE, "LURE_TEXT", *render_outputs(demo_result()))
 
-    theme=gr.themes.Base(primary_hue="amber",neutral_hue="slate",font=[gr.themes.Font(f) for f in ("ui-sans-serif","system-ui","sans-serif")],
-                         font_mono=[gr.themes.Font(f) for f in ("ui-monospace","Menlo","monospace")]).set(
-        body_background_fill="#0B0D10",body_background_fill_dark="#0B0D10",block_background_fill="#12151A",block_background_fill_dark="#12151A",
-        block_border_color="#252A32",block_border_color_dark="#252A32",input_background_fill="#0F1217",input_background_fill_dark="#0F1217",
-        button_primary_background_fill="#E8A33D",button_primary_background_fill_dark="#E8A33D",
-        button_primary_text_color="#0B0D10",button_primary_text_color_dark="#0B0D10")
+    def diagnose():
+        return diagnostics_html(run_checks(network=True, timeout=10.0))
+
+    theme = gr.themes.Base(primary_hue="amber", neutral_hue="slate", font=[gr.themes.Font(f) for f in ("ui-sans-serif", "system-ui", "sans-serif")],
+                           font_mono=[gr.themes.Font(f) for f in ("ui-monospace", "Menlo", "monospace")]).set(
+        body_background_fill="#0B0D10", body_background_fill_dark="#0B0D10", block_background_fill="#12151A", block_background_fill_dark="#12151A",
+        block_border_color="#252A32", block_border_color_dark="#252A32", input_background_fill="#0F1217", input_background_fill_dark="#0F1217",
+        button_primary_background_fill="#E8A33D", button_primary_background_fill_dark="#E8A33D",
+        button_primary_text_color="#0B0D10", button_primary_text_color_dark="#0B0D10")
 
     # Gradio >=6 moveu css/theme/js do Blocks() para launch(); guardamos o estilo para o launch.
-    style=dict(css=APP_CSS,theme=theme,js="() => { document.body.classList.add('dark'); }")
-    legacy=int(gr.__version__.split(".")[0])<6
-    with gr.Blocks(title="Tropeiro Intel · Investigation Workbench",**(style if legacy else {})) as app:
+    style = dict(css=APP_CSS, theme=theme, js="() => { document.body.classList.add('dark'); }")
+    legacy = int(gr.__version__.split(".")[0]) < 6
+    with gr.Blocks(title="Tropeiro Intel · Investigation Workbench", **(style if legacy else {})) as app:
         gr.HTML(HERO)
         with gr.Row():
-            with gr.Column(scale=1,min_width=360,elem_classes=["ti-card"]):
+            with gr.Column(scale=1, min_width=360, elem_classes=["ti-card"]):
                 gr.Markdown("### Nova investigação")
-                target_type=gr.Dropdown(choices=["AUTO","DOMAIN","URL","IP","EMAIL","HASH","PHONE","MULTI_IOC","LURE_TEXT"],value="AUTO",label="Tipo de busca")
-                target=gr.Textbox(label="Alvo da investigação",placeholder="domínio, URL, IP… ou cole o texto da isca (aceita hxxp / [.])",lines=4)
-                with gr.Accordion("Opções avançadas",open=False):
+                target_type = gr.Dropdown(choices=["AUTO", "DOMAIN", "URL", "IP", "EMAIL", "HASH", "PHONE", "MULTI_IOC", "LURE_TEXT"], value="AUTO", label="Tipo de busca")
+                target = gr.Textbox(label="Alvo da investigação", placeholder="domínio, URL, IP… ou cole o texto da isca (aceita hxxp / [.])", lines=4)
+                with gr.Accordion("Opções avançadas", open=False):
                     with gr.Row():
-                        case_id=gr.Textbox(value="TI-UI-001",label="ID do caso")
-                        analyst=gr.Textbox(value="Analista",label="Analista")
-                    brand=gr.Textbox(label="Marca (opcional)",placeholder="ex.: Receita Federal")
-                    org=gr.Textbox(label="Organização imitada (opcional)")
+                        case_id = gr.Textbox(value="TI-UI-001", label="ID do caso")
+                        analyst = gr.Textbox(value="Analista", label="Analista")
+                    brand = gr.Textbox(label="Marca (opcional)", placeholder="ex.: Receita Federal")
+                    org = gr.Textbox(label="Organização imitada (opcional)")
                     with gr.Row():
-                        mode=gr.Dropdown(["PASSIVE","SAFE_ENRICHMENT","AUTHORIZED_ACTIVE"],value="PASSIVE",label="Modo")
-                        budget=gr.Dropdown(["free","balanced","extended"],value="balanced",label="Profundidade")
-                    memory_enabled=gr.Checkbox(value=True,label="Usar Campaign Memory")
-                    memory_path=gr.Textbox(label="Arquivo da memória (opcional)")
-                ai_mode=gr.Dropdown(["OFF","GLINER_ONLY","GLINER_QWEN","AUTO"],value="OFF",label="IA (modelos)",
-                                    info="OFF ainda extrai com regras. GLiNER/Qwen acrescentam entidades e análise.")
-                run=gr.Button("Executar investigação",variant="primary")
-                demo=gr.Button("Carregar caso de demonstração (offline)")
-                gr.Markdown("PASSIVE · balanced é o recomendado. E-mail e telefone são tratados como IOCs já observados, sem busca de dados privados.")
+                        mode = gr.Dropdown(["PASSIVE", "SAFE_ENRICHMENT", "AUTHORIZED_ACTIVE"], value="PASSIVE", label="Modo")
+                        budget = gr.Dropdown(["free", "balanced", "extended"], value="balanced", label="Profundidade",
+                                             info="prazo da coleta: 45 s / 90 s / 180 s")
+                    memory_enabled = gr.Checkbox(value=True, label="Usar Campaign Memory")
+                    memory_path = gr.Textbox(label="Arquivo da memória (opcional)")
+                ai_mode = gr.Dropdown(["OFF", "GLINER_ONLY", "GLINER_QWEN", "AUTO"], value="OFF", label="IA (modelos)",
+                                      info="OFF ainda extrai com regras. GLiNER/Qwen acrescentam entidades e análise.")
+                run = gr.Button("Executar investigação", variant="primary")
+                demo = gr.Button("Carregar caso de demonstração (offline)")
+                gr.Markdown("PASSIVE · balanced é o recomendado. E-mail e telefone são IOCs já observados: nenhuma busca de dados privados.")
+                with gr.Accordion("Diagnóstico do ambiente", open=False):
+                    gr.Markdown("Testa Python, dependências, pastas e a rede até cada fonte. Rode se uma busca não funcionar.")
+                    diag_btn = gr.Button("Rodar diagnóstico")
+                    diag_out = gr.HTML()
             with gr.Column(scale=2):
-                summary=gr.HTML("<div class='ti-card ti-empty'><b>Aguardando investigação.</b><br>Preencha o alvo à esquerda ou carregue o caso de demonstração.</div>")
+                summary = gr.HTML("<div class='ti-card ti-empty'><b>Aguardando investigação.</b><br>Preencha o alvo à esquerda ou carregue o caso de demonstração.</div>")
                 with gr.Tabs():
                     with gr.Tab("Grafo"):
-                        graph=gr.HTML()
+                        graph = gr.HTML()
                     with gr.Tab("IOCs"):
-                        ioc_table=gr.Dataframe(interactive=False,wrap=True)
+                        ioc_table = gr.Dataframe(interactive=False, wrap=True)
                     with gr.Tab("Isca e IA"):
-                        lure_view=gr.HTML()
-                        edges_table=gr.Dataframe(interactive=False,wrap=True,label="Ligações propostas pela IA (derivadas)")
-                        ai_table=gr.Dataframe(interactive=False,wrap=True,label="Entidades GLiNER (bruto)")
-                        ai_json=gr.JSON(label="Análise Qwen (validada contra o Evidence Ledger)")
+                        lure_view = gr.HTML()
+                        edges_table = gr.Dataframe(interactive=False, wrap=True, label="Ligações propostas pela IA (derivadas)")
+                        ai_table = gr.Dataframe(interactive=False, wrap=True, label="Entidades GLiNER (bruto)")
+                        ai_json = gr.JSON(label="Análise Qwen (validada contra o Evidence Ledger)")
                     with gr.Tab("Dados"):
-                        rel_table=gr.Dataframe(interactive=False,wrap=True,label="Relações coletadas")
-                        ev_table=gr.Dataframe(interactive=False,wrap=True,label="Evidence Ledger")
-                        source_table=gr.Dataframe(interactive=False,wrap=True,label="Saúde das fontes")
+                        rel_table = gr.Dataframe(interactive=False, wrap=True, label="Relações coletadas")
+                        ev_table = gr.Dataframe(interactive=False, wrap=True, label="Evidence Ledger")
+                        source_table = gr.Dataframe(interactive=False, wrap=True, label="Saúde das fontes")
                     with gr.Tab("Linha do tempo"):
-                        timeline=gr.Markdown()
+                        timeline = gr.Markdown()
                     with gr.Tab("Campanha"):
                         gr.Markdown("**Lotes de registro:** domínios criados em sequência, no mesmo registrar e nameservers (indício de operação comum, não prova).")
-                        batches_table=gr.Dataframe(interactive=False,wrap=True,label="Lotes de registro")
-                        lures_table=gr.Dataframe(interactive=False,wrap=True,label="Iscas parecidas em casos anteriores (Campaign Memory)")
+                        batches_table = gr.Dataframe(interactive=False, wrap=True, label="Lotes de registro")
+                        lures_table = gr.Dataframe(interactive=False, wrap=True, label="Iscas parecidas em casos anteriores (Campaign Memory)")
                     with gr.Tab("Memória"):
-                        related_table=gr.Dataframe(interactive=False,wrap=True,label="Casos relacionados")
-                        prevalence_table=gr.Dataframe(interactive=False,wrap=True,label="Prevalência / raridade")
+                        related_table = gr.Dataframe(interactive=False, wrap=True, label="Casos relacionados")
+                        prevalence_table = gr.Dataframe(interactive=False, wrap=True, label="Prevalência / raridade")
                     with gr.Tab("Exportar"):
                         gr.Markdown("**STIX 2.1** (Indicators + Campaign), **MISP** e **Sigma** prontos para o seu TIP/SIEM.")
-                        cti_files=gr.File(label="STIX · MISP · Sigma",file_count="multiple")
-                        with gr.Accordion("Relatório HTML e pacote completo (ZIP)",open=False):
-                            report_file=gr.File(label="Relatório HTML")
-                            package_file=gr.File(label="Pacote completo ZIP")
-        outs=[summary,graph,ioc_table,lure_view,edges_table,ai_table,ai_json,rel_table,ev_table,timeline,source_table,related_table,prevalence_table,batches_table,lures_table,cti_files,report_file,package_file]
-        run.click(execute,inputs=[target,target_type,case_id,analyst,brand,org,mode,budget,ai_mode,memory_enabled,memory_path],outputs=outs)
-        demo.click(load_demo,outputs=[target,target_type,*outs])
-    app.launch_style={} if legacy else style
+                        cti_files = gr.File(label="STIX · MISP · Sigma", file_count="multiple")
+                        with gr.Accordion("Relatório HTML e pacote completo (ZIP)", open=False):
+                            report_file = gr.File(label="Relatório HTML")
+                            package_file = gr.File(label="Pacote completo ZIP")
+        outs = [summary, graph, ioc_table, lure_view, edges_table, ai_table, ai_json, rel_table, ev_table, timeline, source_table,
+                related_table, prevalence_table, batches_table, lures_table, cti_files, report_file, package_file]
+        assert len(outs) == N_OUTPUTS
+        run.click(execute, inputs=[target, target_type, case_id, analyst, brand, org, mode, budget, ai_mode, memory_enabled, memory_path], outputs=outs)
+        demo.click(load_demo, outputs=[target, target_type, *outs])
+        diag_btn.click(diagnose, outputs=[diag_out])
+    app.launch_style = {} if legacy else style
     return app
 
-def launch_local(server_port: int=7860, share: bool=False):
-    """Abre o Workbench no navegador local e bloqueia até Ctrl+C."""
-    app=build_app()
-    app.launch(server_name="127.0.0.1",server_port=server_port,share=share,show_error=True,**app.launch_style)
 
-def launch_colab_frontend(server_port: int=7860, inline: bool=True):
-    app=build_app()
-    app.launch(server_name="0.0.0.0",server_port=server_port,share=False,inline=inline,prevent_thread_lock=True,show_error=True,**app.launch_style)
+def _allowed():
+    return [str(default_base()), str(Path.home() / ".tropeiro")]
+
+
+def _free_port(start: int = 7860, tries: int = 40) -> int:
+    for port in range(start, start + tries):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(("127.0.0.1", port)) != 0:
+                return port
+    raise RuntimeError(f"nenhuma porta livre entre {start} e {start + tries - 1}")
+
+
+def launch_local(server_port: int | None = None, share: bool = False, open_browser: bool = True):
+    """Abre o Workbench no navegador local e bloqueia até Ctrl+C. Sem porta: usa a primeira livre a partir de 7860."""
+    port = server_port or _free_port()
+    app = build_app()
+    print(f"Tropeiro Workbench: http://127.0.0.1:{port}  (Ctrl+C para encerrar)", flush=True)
+    app.queue().launch(server_name="127.0.0.1", server_port=port, share=share, inbrowser=open_browser, show_error=True,
+                       allowed_paths=_allowed(), **app.launch_style)
+
+
+def launch_colab_frontend(server_port: int = 7860, inline: bool = True):
+    """No Colab, deixa o Gradio decidir o compartilhamento (precisa de URL pública para exibir a interface)."""
+    app = build_app()
+    app.queue().launch(server_name="0.0.0.0", server_port=server_port, share=None, inline=inline, prevent_thread_lock=True, show_error=True,
+                       allowed_paths=_allowed(), **app.launch_style)
     return app

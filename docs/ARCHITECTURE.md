@@ -1,5 +1,36 @@
 # Arquitetura
 
+## Pipeline de investigação (4.8)
+
+Interface, CLI e API Python usam **o mesmo pipeline** (`tropeiro/pipeline.py`); nenhuma lógica de investigação vive no front.
+
+```text
+ alvo (texto)
+   │  targets.py        classifica (domínio, URL, IP, e-mail, hash, telefone, lote, isca) e extrai assuntos;
+   │                    refang; plataformas legítimas e IPs não públicos viram contexto, não alvo
+   ▼
+ plano de fontes        onboarding.features_for_target + modo + chaves + profundidade → lista de tarefas
+   │                    (uma por fonte × assunto) e linhas SKIPPED_* explicando o que ficou de fora
+   ▼
+ sources.py             executor concorrente: prazo total (45/90/180 s), TIMEOUT para o que não terminou,
+   │                    UNAVAILABLE com mensagem legível, circuit breaker nos detalhes do urlscan
+   ▼
+ Evidence Ledger ──► decisões por IOC ──► extração de entidades (regras BR + GLiNER) ──► IA opcional (Qwen, verificada)
+   ▼
+ Campaign Memory (casos parecidos, iscas parecidas) ──► relatório HTML + STIX + MISP + Sigma + ZIP com manifest
+```
+
+| Módulo | Responsabilidade |
+|---|---|
+| `targets.py` | `classify`, `parse_target`, `registrable` |
+| `onboarding.py` | `features_for_target`, `skip_reason`, `budget_limits` (qual fonte liga para qual tipo) |
+| `sources.py` | `Task`, `run_tasks`, `describe_error`, estados de cada consulta |
+| `pipeline.py` | `plan_investigation` (sem rede) e `investigate` (completo) |
+| `enrichment.py` | respostas das fontes → `Observation` (domínio, IP, hash) |
+| `doctor.py` | diagnóstico do ambiente e da rede |
+| `frontend/` | Workbench (Gradio) e renderizadores; `cli.py`: `search`, `doctor`, `lure`, `workbench` |
+
+
 ## Camadas
 1. Ingestão multi-IOC e lure text.
 2. Coletores passivos.

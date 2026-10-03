@@ -5,33 +5,38 @@ Escolha **um** caminho. Todos terminam com a mesma pergunta respondida: *o que a
 | Caminho | Tempo | Precisa de | Faz coleta na rede? |
 |---|---|---|---|
 | [A. Workbench local](#a-workbench-local-recomendado) | 5 min | Python 3.10+ | sim (ou demo offline) |
-| [B. CLI offline](#b-cli-offline-triagem-de-uma-isca) | 2 min | Python 3.10+ | não |
+| [B. CLI](#b-cli-busca-sem-interface-e-triagem-offline) | 2 min | Python 3.10+ | `search`: sim · `lure`: não |
 | [C. Notebook no Colab](#c-notebook-no-google-colab-investigação-completa) | 10 min | conta Google | sim (investigação completa) |
 
 ## A. Workbench local (recomendado)
 
 ```bash
 git clone https://github.com/Ridd1kulusC0d3r/tropeiro-intel.git && cd tropeiro-intel
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e ".[colab]"
-tropeiro workbench
+tropeiro doctor            # confirma Python, dependências, pastas e rede (rode uma vez)
+tropeiro workbench         # abre o navegador na primeira porta livre a partir de 7860
 ```
 
-1. Abra `http://127.0.0.1:7860`.
-2. Clique em **Carregar caso de demonstração (offline)** e explore as abas (nada é consultado na internet).
-3. Para um caso real: **Tipo de busca = AUTO**, cole um domínio (ou o texto da isca), mantenha **IA = OFF** e clique em **Executar investigação**.
+1. Clique em **Carregar caso de demonstração (offline)** e explore as abas (nada é consultado na internet).
+2. Para um caso real: **Tipo de busca = AUTO**, cole um domínio, IP ou o texto da isca, mantenha **IA = OFF** e clique em **Executar investigação**.
+3. A coleta aparece **ao vivo**, fonte a fonte, com um prazo máximo (padrão 90 s). Uma fonte lenta não trava a busca.
 4. Leia **IOCs** (decisão) → **Isca e IA** → **Dados → Saúde das fontes** → **Exportar**.
 
-Guia completo: [USER_GUIDE](USER_GUIDE.md).
+Se a busca não funcionar, abra **Diagnóstico do ambiente** (painel esquerdo) ou rode `tropeiro doctor`: ele diz o que falta. Guia completo: [USER_GUIDE](USER_GUIDE.md).
 
-## B. CLI offline: triagem de uma isca
+## B. CLI: busca sem interface e triagem offline
 
 ```bash
 pip install -e .
-tropeiro lure examples/lure_receita.txt --case CASO-001 --out saida/
+tropeiro doctor                                   # diagnóstico
+tropeiro search example.com                       # busca completa, com progresso no terminal
+tropeiro search 8.8.4.4                           # IP: DNS reverso, RDAP da rede, scans do urlscan
+tropeiro search isca.txt --case CASO-001          # texto da isca (arquivo) → marca, IOCs, fontes e relatório
+tropeiro lure examples/lure_receita.txt --out saida/   # só extração offline + STIX/MISP/Sigma
 ```
 
-Você recebe marca/tema, IOCs (com plataformas legítimas separadas) e `stix.json`, `misp.json` e `sigma_dns.yml` em `saida/`. Detalhes: [CLI](CLI.md).
+`search` imprime cada fonte conforme termina, o resumo, a tabela de decisões e onde estão o relatório e o ZIP. Detalhes: [CLI](CLI.md).
 
 ## C. Notebook no Google Colab: investigação completa
 
