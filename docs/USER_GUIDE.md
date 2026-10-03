@@ -3,8 +3,9 @@
 O Workbench é a interface web do Tropeiro. Ele roda no seu computador (ou no Colab) e transforma um alvo — domínio, URL, IP ou o **texto de uma isca** — em evidência, relações, decisão por IOC e exportações.
 
 ```bash
-tropeiro workbench            # abre http://127.0.0.1:7860
-tropeiro workbench --port 8080
+tropeiro workbench                 # abre o navegador na primeira porta livre a partir de 7860
+tropeiro workbench --port 8080     # porta fixa
+tropeiro workbench --no-browser    # servidor/SSH: só imprime a URL
 ```
 
 No Colab: `from tropeiro.frontend.app import launch_colab_frontend; launch_colab_frontend()`.
@@ -30,13 +31,27 @@ O caso de demonstração usa uma isca fictícia da "Receita Federal" com domíni
 | **IA (modelos)** | `OFF` (padrão) ainda extrai com **regras**. `GLINER_ONLY` acrescenta o GLiNER. `GLINER_QWEN` acrescenta também uma análise do Qwen. `AUTO` roda o GLiNER e só usa o Qwen se houver GPU |
 | **Opções avançadas** | ID do caso, analista, marca, organização imitada, modo, profundidade, Campaign Memory e caminho da memória |
 
-Botões: **Executar investigação** (coleta real) e **Carregar caso de demonstração** (offline).
+Botões: **Executar investigação** (coleta real), **Carregar caso de demonstração** (offline) e, em **Diagnóstico do ambiente**, **Rodar diagnóstico** (veja abaixo).
 
 > **Modo e profundidade** (em *Opções avançadas*) decidem quais fontes rodam e quantos detalhes de scan são baixados. Veja [CONFIGURATION](CONFIGURATION.md#o-que-liga-em-cada-superfície).
 
+## Durante a busca
+
+Ao clicar em **Executar investigação**, o painel superior mostra a coleta **ao vivo**: cada fonte aparece quando termina, com o tempo e o resultado (`✓ OK`, `✗ indisponível`, `⏱ prazo`, `– sem chave`...). As consultas rodam **em paralelo** e há um **prazo total** conforme a profundidade (45 s `free`, 90 s `balanced`, 180 s `extended`): uma fonte lenta não trava a busca; o que não terminar a tempo vira `TIMEOUT` e o resultado sai **parcial**. Um domínio costuma levar de 10 a 40 s; um IP, poucos segundos.
+
+O que cada tipo de alvo consulta está em [SEARCH_TYPES](SEARCH_TYPES.md).
+
+## Se a busca falhar
+
+Erros **nunca** ficam em silêncio: aparece um painel vermelho **"A busca não concluiu"** com a causa. Em seguida:
+
+1. abra **Diagnóstico do ambiente** (painel esquerdo) e clique em **Rodar diagnóstico**: ele testa Python, dependências, pastas e a rede até cada fonte, e diz o que corrigir (`OK`, `DEGRADADO` ou `FALHA`);
+2. tente sem interface: `tropeiro search SEU_ALVO`;
+3. veja [TROUBLESHOOTING](TROUBLESHOOTING.md#minha-busca-não-funciona-ou-parece-travada).
+
 ## O resumo do caso
 
-Seis cartões no topo: **evidências**, **relações**, **entidades extraídas**, **ligações propostas (IA)**, **fontes OK** e **casos relacionados** (da Campaign Memory). A linha abaixo diz o que rodou na IA e na extração, por exemplo `extração: regras`.
+Seis cartões no topo: **evidências**, **relações**, **entidades extraídas**, **ligações propostas (IA)**, **fontes OK** e **casos relacionados** (da Campaign Memory). Abaixo, uma linha diz quanto tempo levou, quantas fontes falharam ou foram puladas e quantos IOCs de plataformas legítimas ficaram só como contexto; outra diz o que rodou na IA e na extração, por exemplo `extração: regras`.
 
 ## Aba Grafo
 
@@ -80,7 +95,7 @@ Responde "o que esta mensagem contém?".
 
 ## Aba Dados
 
-Três tabelas brutas: **Relações coletadas**, **Evidence Ledger** (cada observação com origem e confiabilidade da fonte) e **Saúde das fontes** (`OK`, `UNAVAILABLE` e o tempo de cada consulta). Tabela vazia é resultado válido, não prova de que algo é benigno.
+Três tabelas brutas: **Relações coletadas** (de, relação, para, fonte), **Evidence Ledger** (cada observação com origem e confiabilidade da fonte) e **Saúde das fontes**: uma linha por consulta, com `estado` (`✓ OK`, `✗ indisponível` com o motivo, `⏱ prazo`, `– sem chave`...), itens e segundos. As falhas aparecem primeiro. Significado de cada estado: [CONFIGURATION](CONFIGURATION.md#prazo-tempo-limite-e-estados-das-consultas). Tabela vazia é resultado válido, não prova de que algo é benigno.
 
 ## Aba Linha do tempo
 
@@ -124,6 +139,8 @@ Formatos e importação: [OUTPUTS](OUTPUTS.md).
 ## Limites conhecidos
 
 - O Workbench não roda dnstwist, DNSDumpster, FOFA nem Censys (use o notebook).
-- A confiança inicial de cada IOC no Workbench tem teto de 0,55: espere `MONITOR`/`HUNT`; `BLOCK` exige o caso completo.
+- A confiança inicial de cada IOC tem teto de 0,55 (0,70 com sinal malicioso do VirusTotal/ThreatFox): espere `MONITOR`/`HUNT`; `BLOCK` exige o caso completo.
+- Telefone não consulta nenhuma fonte (privacidade) e hash exige chave de VirusTotal ou ThreatFox.
 - O caso de demonstração não consulta a rede; os números são fictícios.
 - Com Gradio 6, o tema é aplicado no `launch()`; use `tropeiro workbench` (ou `launch_colab_frontend`) em vez de `build_app().launch()` para manter o visual.
+- No **Colab**, o Gradio cria um link público temporário (`gradio.live`) para exibir a interface: não cole dados sensíveis de vítimas.

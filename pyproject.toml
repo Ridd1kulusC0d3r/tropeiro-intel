@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tropeiro-intel"
-version = "4.7.0"
+version = "4.8.0"
 description = "Defensive phishing campaign OSINT, attribution and actionable intelligence for Google Colab and Python"
 readme = "README.md"
 requires-python = ">=3.10"

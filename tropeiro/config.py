@@ -9,3 +9,17 @@ class Settings:
     urlscan_api_key:str='';vt_api_key:str='';threatfox_auth_key:str='';phishtank_app_key:str='';dnsdumpster_api_key:str='';fofa_api_key:str='';censys_pat:str='';censys_organization_id:str=''
     source_reliability:dict=field(default_factory=lambda:{'manual/input':.90,'dns':.95,'rdap':.95,'crt.sh':.90,'wayback':.85,'commoncrawl':.80,'urlscan':.90,'otx':.70,'virustotal':.85,'threatfox':.85,'urlhaus':.85,'phishtank':.80,'openphish':.80,'dnstwist':.75,'dnsdumpster':.85,'fofa':.85,'censys':.90,'derived':.60})
     def active_allowed(self):return self.mode=='AUTHORIZED_ACTIVE' and bool(self.enable_http_probe)
+
+def secret(name: str, default: str = "") -> str:
+    """Chave opcional: Colab Secrets -> variável de ambiente -> vazio. Nunca registra o valor."""
+    try:
+        from google.colab import userdata
+        v = userdata.get(name)
+        if v:
+            return v
+    except Exception:
+        pass
+    import os
+    return os.getenv(name, default)
+
+SECRET_NAMES = ("URLSCAN_API_KEY", "VT_API_KEY", "THREATFOX_AUTH_KEY", "DNSDUMPSTER_API_KEY", "FOFA_API_KEY", "CENSYS_PAT")

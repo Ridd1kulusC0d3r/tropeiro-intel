@@ -11,11 +11,20 @@ Não, e foi desenhado para não servir. E-mail e telefone são tratados **só co
 **Precisa pagar alguma API?**
 Não. O núcleo roda sem chaves. Chaves opcionais (VirusTotal, ThreatFox, FOFA, Censys, DNSDumpster) ampliam a coleta. Veja [CONFIGURATION](CONFIGURATION.md#chaves-de-api-todas-opcionais).
 
+**Quanto tempo leva uma busca?**
+Um domínio costuma levar de 10 a 40 s; um IP, poucos segundos; telefone e texto sem domínio, instantâneo. A coleta é paralela e tem prazo total (45/90/180 s conforme a profundidade): o que não terminar vira `TIMEOUT` e o resultado sai parcial.
+
+**Não consegui rodar nenhuma busca. O que faço?**
+Rode `tropeiro doctor` (ou o painel *Diagnóstico do ambiente* do Workbench) e depois `tropeiro search example.com`. Veja [TROUBLESHOOTING](TROUBLESHOOTING.md#minha-busca-não-funciona-ou-parece-travada).
+
+**Por que buscar um telefone (ou um hash) não consulta nada?**
+Telefone: por privacidade, nenhuma fonte pública é consultada; o valor serve para correlação e memória. Hash: VirusTotal e ThreatFox exigem chave (`VT_API_KEY`, `THREATFOX_AUTH_KEY`); sem ela a tela explica.
+
 **Posso usar offline?**
-Sim, em parte: a CLI e a API Python de extração, decisão e exportação funcionam sem rede. A coleta (DNS, RDAP, certificados, scans) precisa de internet.
+Sim, em parte: `tropeiro lure` e a API Python de extração, decisão e exportação funcionam sem rede. A coleta (`tropeiro search`, Workbench, notebook) precisa de internet.
 
 **Qual a diferença entre Workbench, notebook e CLI?**
-Workbench: interface local, rápida, com grafo e exportações. Notebook: investigação completa guiada (Wayback, VirusTotal, lookalikes). CLI: análise offline do texto de uma isca. Tabela em [CONFIGURATION](CONFIGURATION.md#o-que-liga-em-cada-superfície).
+Workbench e `tropeiro search`: o mesmo pipeline (interface com grafo e exportações, ou terminal). Notebook: investigação guiada com dnstwist e fontes extras. `tropeiro lure`: análise offline do texto de uma isca. Tabela em [CONFIGURATION](CONFIGURATION.md#o-que-liga-em-cada-superfície).
 
 ## Privacidade e segurança
 

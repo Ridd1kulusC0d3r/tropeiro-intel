@@ -25,6 +25,10 @@ Nunca executado com modelos reais fora dos testes: GLiNER e Qwen (rodar no Colab
 | `cluster_kits` no pipeline | **pendente**: exige baixar os arquivos do site (favicon, JS), próxima fase |
 | Release, topics, social preview | manual no GitHub |
 
+### Reforma 4.8 (busca que funciona de verdade)
+
+A busca real, em rede real, foi o gargalo. Feito na 4.8: pipeline único (interface, CLI e API), coleta **concorrente com prazo** e circuit breaker, estados explícitos por consulta, **IP, e-mail e hash** passaram a buscar, classificação de alvos corrigida (texto com número não é telefone), `tropeiro doctor` e `tropeiro search`, correção do `InvalidPathError` do Gradio e do Workbench no Colab, notebook com formulário de reserva. **Pendente:** dnstwist, DNSDumpster, FOFA e Censys no Workbench; testar os fluxos de Colab e Windows em máquinas reais.
+
 ## Fase 1 · Confiança nos números (1 mês)
 
 - **Calibração real:** rotular 20–30 casos (campanha confirmada / coincidência) e publicar Brier + tabela de confiabilidade no README. É o diferencial mais raro: dizer quanto o score acerta.

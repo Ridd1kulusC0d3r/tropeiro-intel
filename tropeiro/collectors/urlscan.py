@@ -11,3 +11,8 @@ def result(scan_id,api_key=''):
 
 def redirects(scan_result):
     return scan_result.get('data',{}).get('redirects',[]) if isinstance(scan_result,dict) else []
+
+
+def search_ip(ip,api_key=''):
+    q=urllib.parse.urlencode({'q':f'page.ip:"{ip}"','size':100}); h={'api-key':api_key} if api_key else {}
+    return get('https://urlscan.io/api/v1/search/?'+q,headers=h)

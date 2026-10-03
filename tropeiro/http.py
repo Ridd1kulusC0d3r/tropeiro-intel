@@ -5,7 +5,9 @@ from .storage.cache import FileCache
 
 UA={'User-Agent':'TropeiroIntel/4.5 defensive-osint'}
 RETRY_STATUS={429,500,502,503,504}
-MIN_INTERVAL=1.0  # segundos entre chamadas ao mesmo host
+MIN_INTERVAL=0.3  # segundos entre chamadas ao mesmo host (padrão)
+HOST_INTERVALS={'urlscan.io':1.0,'crt.sh':1.0,'web.archive.org':1.0,'index.commoncrawl.org':1.0}   # fontes sensíveis a rajadas
+TIMEOUT_CAP=20.0  # nenhuma chamada espera mais que isto (uma fonte lenta não pode travar a busca)
 _last_call={}
 _lock=threading.Lock()
 _cache=None
@@ -18,7 +20,7 @@ def set_cache(path=None,ttl=3600):
 def _throttle(url):
     host=urllib.parse.urlsplit(url).hostname or ''
     with _lock:
-        wait=_last_call.get(host,0)+MIN_INTERVAL-time.monotonic()
+        wait=_last_call.get(host,0)+HOST_INTERVALS.get(host,MIN_INTERVAL)-time.monotonic()
         _last_call[host]=time.monotonic()+max(wait,0)
     if wait>0: time.sleep(wait)
 
@@ -40,7 +42,7 @@ def request(url,headers=None,timeout=30,as_json=True,method='GET',payload=None,r
         _throttle(url)
         try:
             req=urllib.request.Request(url,data=body,headers=h,method=method)
-            with urllib.request.urlopen(req,timeout=timeout) as r:data=r.read().decode('utf-8','replace')
+            with urllib.request.urlopen(req,timeout=min(float(timeout),TIMEOUT_CAP)) as r:data=r.read().decode('utf-8','replace')
             out=json.loads(data) if as_json else data
             if _cache is not None and method=='GET' and not headers: _cache.set(key,out)
             return out

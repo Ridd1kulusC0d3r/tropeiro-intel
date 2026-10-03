@@ -31,8 +31,10 @@ Evidência rastreável, correlação cautelosa e IA verificada — nunca prova a
 
 ```bash
 pip install -e ".[colab]"          # inclui Gradio
-tropeiro workbench                 # Workbench em http://127.0.0.1:7860 (o botão "caso de demonstração" funciona sem rede)
-tropeiro lure examples/lure_receita.txt --case C1 --out out/   # CLI offline: marca, IOCs, STIX/MISP/Sigma
+tropeiro doctor                    # confirma Python, dependências, pastas e a rede (rode uma vez)
+tropeiro workbench                 # Workbench no navegador (o botão "caso de demonstração" funciona sem rede)
+tropeiro search example.com        # a mesma busca, sem interface, com progresso no terminal
+tropeiro lure examples/lure_receita.txt --case C1 --out out/   # offline: marca, IOCs, STIX/MISP/Sigma
 ```
 
 Ou abra no **[Google Colab](https://colab.research.google.com/github/Ridd1kulusC0d3r/tropeiro-intel/blob/main/notebooks/Tropeiro_Intel_Official_Colab.ipynb)** — nenhuma API paga é necessária.
@@ -52,6 +54,7 @@ Detalhes: [ARCHITECTURE](docs/ARCHITECTURE.md) · [Camada de IA](docs/AI.md) · 
 | Quero... | Leia |
 |---|---|
 | primeira investigação em 5 minutos | [Início rápido](docs/QUICKSTART.md) |
+| a busca não funciona / está lenta | [Troubleshooting](docs/TROUBLESHOOTING.md#minha-busca-não-funciona-ou-parece-travada) (`tropeiro doctor`) |
 | usar o Workbench aba por aba | [Guia do Workbench](docs/USER_GUIDE.md) |
 | analisar uma isca pela linha de comando | [CLI](docs/CLI.md) |
 | seguir um passo a passo (triagem, takedown, regras...) | [Receitas](docs/COOKBOOK.md) |

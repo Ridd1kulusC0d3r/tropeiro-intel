@@ -40,10 +40,13 @@ Combine com vírgula: `pip install -e ".[colab,ai]"`.
 
 ```bash
 python -c "import tropeiro; print(tropeiro.__version__)"
-tropeiro --help
-tropeiro lure examples/lure_receita.txt          # deve listar a marca Receita Federal e o domínio receita-regulariza.example
-tropeiro workbench                               # abre http://127.0.0.1:7860 ; use o botão "Carregar caso de demonstração"
+tropeiro doctor                                   # Python, dependências, pastas e rede até cada fonte
+tropeiro search example.com                       # uma busca real, com progresso no terminal
+tropeiro lure examples/lure_receita.txt           # offline: marca Receita Federal e o domínio receita-regulariza.example
+tropeiro workbench                                # abre o navegador; use "Carregar caso de demonstração" para ver sem rede
 ```
+
+`tropeiro doctor` termina em `OK`, `DEGRADADO` (algo opcional, como o Wayback, está inalcançável: a busca funciona) ou `FALHA` (algo essencial falhou e diz o que corrigir).
 
 Se o comando `tropeiro` não for encontrado, o ambiente virtual não está ativo; use `python -m tropeiro.cli ...`.
 

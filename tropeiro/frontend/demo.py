@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import tempfile
 from ..models import Observation
-from ..utils import extract_iocs, refang, root_domain
+from ..utils import extract_iocs, refang
 from ..evidence.ledger import build as build_ledger
 from ..ai.hybrid import extract_hybrid, correlate_entities
 from ..intelligence.br_lures import detect_br_lures
